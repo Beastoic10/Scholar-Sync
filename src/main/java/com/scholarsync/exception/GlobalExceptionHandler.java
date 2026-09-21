@@ -124,6 +124,38 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
     }
 
+    @ExceptionHandler(InvalidTaskTransitionException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidTaskTransitionException(
+            InvalidTaskTransitionException ex,
+            HttpServletRequest request) {
+
+        ApiErrorResponse errorResponse = ApiErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("INVALID_TASK_TRANSITION")
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    @ExceptionHandler(TaskAccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleTaskAccessDeniedException(
+            TaskAccessDeniedException ex,
+            HttpServletRequest request) {
+
+        ApiErrorResponse errorResponse = ApiErrorResponse.builder()
+                .timestamp(Instant.now())
+                .status(HttpStatus.FORBIDDEN.value())
+                .error(HttpStatus.FORBIDDEN.getReasonPhrase())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiErrorResponse> handleAccessDeniedException(
             AccessDeniedException ex,

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScholarSync - Academic Research Kanban</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Navigation Bar -->
+    <header class="navbar">
+      <div class="nav-brand">
+        <span class="logo-icon">🎓</span>
+        <span class="logo-text">Scholar<strong>Sync</strong></span>
+        <span class="badge-phase">Kanban Phase</span>
+      </div>
+      <div class="nav-actions" id="nav-user-panel" style="display: none;">
+        <span class="user-greeting">Welcome, <strong id="nav-user-name">User</strong></span>
+        <span class="role-pill" id="nav-user-role">SUPERVISOR</span>
+        <a href="/swagger-ui.html" target="_blank" class="btn btn-sm btn-outline">OpenAPI Docs</a>
+        <button id="btn-logout" class="btn btn-sm btn-secondary">Sign Out</button>
+      </div>
+    </header>
+
+    <!-- Notification Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Main Content Area -->
+    <main class="main-container">
+
+      <!-- AUTHENTICATION VIEW -->
+      <section id="auth-view" class="view-section">
+        <div class="auth-card">
+          <div class="auth-tabs">
+            <button id="tab-login" class="tab-btn active">Sign In</button>
+            <button id="tab-register" class="tab-btn">Register</button>
+          </div>
+
+          <!-- Login Form -->
+          <form id="form-login" class="auth-form">
+            <h2>Welcome back</h2>
+            <p class="subtitle">Enter your academic credentials to access research workspaces.</p>
+            <div class="form-group">
+              <label for="login-email">Email Address</label>
+              <input type="email" id="login-email" required placeholder="scholar@university.edu" />
+            </div>
+            <div class="form-group">
+              <label for="login-password">Password</label>
+              <input type="password" id="login-password" required placeholder="••••••••" />
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+          </form>
+
+          <!-- Register Form -->
+          <form id="form-register" class="auth-form" style="display: none;">
+            <h2>Create Account</h2>
+            <p class="subtitle">Join as a student researcher or faculty supervisor.</p>
+            <div class="form-group">
+              <label for="reg-name">Full Name</label>
+              <input type="text" id="reg-name" required placeholder="e.g. Dr. Ada Lovelace" />
+            </div>
+            <div class="form-group">
+              <label for="reg-email">Email Address</label>
+              <input type="email" id="reg-email" required placeholder="ada@university.edu" />
+            </div>
+            <div class="form-group">
+              <label for="reg-password">Password (min. 6 characters)</label>
+              <input type="password" id="reg-password" minlength="6" required placeholder="••••••••" />
+            </div>
+            <div class="form-group">
+              <label for="reg-role">Role</label>
+              <select id="reg-role" required>
+                <option value="STUDENT">Student Researcher</option>
+                <option value="SUPERVISOR">Faculty Supervisor</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Register Account</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- DASHBOARD VIEW -->
+      <section id="dashboard-view" class="view-section" style="display: none;">
+        <div class="section-header">
+          <div>
+            <h1>Research Projects</h1>
+            <p class="subtitle">Collaborative academic workspaces supervised by faculty and executed by students.</p>
+          </div>
+          <button id="btn-open-create-project" class="btn btn-primary" style="display: none;">+ New Project</button>
+        </div>
+
+        <div id="projects-grid" class="projects-grid">
+          <!-- Dynamically populated project cards -->
+        </div>
+      </section>
+
+      <!-- PROJECT KANBAN VIEW -->
+      <section id="project-view" class="view-section" style="display: none;">
+        <div class="project-toolbar">
+          <button id="btn-back-dashboard" class="btn btn-sm btn-secondary">← Back to Projects</button>
+          <div class="project-actions">
+            <button id="btn-open-add-member" class="btn btn-sm btn-outline" style="display: none;">+ Assign Student</button>
+            <button id="btn-open-create-task" class="btn btn-sm btn-primary">+ Create Task</button>
+          </div>
+        </div>
+
+        <div class="project-banner">
+          <div class="project-info">
+            <h1 id="proj-title">Project Title</h1>
+            <p id="proj-desc" class="project-desc">Project description goes here...</p>
+            <div class="project-meta">
+              <span><strong>Supervisor:</strong> <span id="proj-supervisor">Dr. Name</span></span>
+              <span><strong>Members:</strong> <span id="proj-members-chips">None</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5-COLUMN KANBAN BOARD -->
+        <div class="kanban-board">
+          <!-- Column 1: PROPOSED -->
+          <div class="kanban-column col-proposed" data-state="PROPOSED">
+            <div class="column-header">
+              <span class="column-title">Proposed</span>
+              <span class="column-counter" id="count-PROPOSED">0</span>
+            </div>
+            <div class="column-cards" id="cards-PROPOSED"></div>
+          </div>
+
+          <!-- Column 2: LITERATURE_REVIEW -->
+          <div class="kanban-column col-lit" data-state="LITERATURE_REVIEW">
+            <div class="column-header">
+              <span class="column-title">Literature Review</span>
+              <span class="column-counter" id="count-LITERATURE_REVIEW">0</span>
+            </div>
+            <div class="column-cards" id="cards-LITERATURE_REVIEW"></div>
+          </div>
+
+          <!-- Column 3: EXPERIMENTATION -->
+          <div class="kanban-column col-exp" data-state="EXPERIMENTATION">
+            <div class="column-header">
+              <span class="column-title">Experimentation</span>
+              <span class="column-counter" id="count-EXPERIMENTATION">0</span>
+            </div>
+            <div class="column-cards" id="cards-EXPERIMENTATION"></div>
+          </div>
+
+          <!-- Column 4: UNDER_REVIEW -->
+          <div class="kanban-column col-review" data-state="UNDER_REVIEW">
+            <div class="column-header">
+              <span class="column-title">Under Review</span>
+              <span class="column-counter" id="count-UNDER_REVIEW">0</span>
+            </div>
+            <div class="column-cards" id="cards-UNDER_REVIEW"></div>
+          </div>
+
+          <!-- Column 5: APPROVED -->
+          <div class="kanban-column col-approved" data-state="APPROVED">
+            <div class="column-header">
+              <span class="column-title">Approved</span>
+              <span class="column-counter" id="count-APPROVED">0</span>
+            </div>
+            <div class="column-cards" id="cards-APPROVED"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- MODALS -->
+
+    <!-- Modal: Create Project -->
+    <div id="modal-create-project" class="modal-backdrop" style="display: none;">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3>Create Research Project</h3>
+          <button class="modal-close" data-close="modal-create-project">&times;</button>
+        </div>
+        <form id="form-create-project">
+          <div class="form-group">
+            <label for="new-proj-title">Project Title</label>
+            <input type="text" id="new-proj-title" required placeholder="e.g. LLM Reasoning Alignment" />
+          </div>
+          <div class="form-group">
+            <label for="new-proj-desc">Description</label>
+            <textarea id="new-proj-desc" rows="3" placeholder="Research hypotheses, scope, and objectives..."></textarea>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close="modal-create-project">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create Project</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Create Task -->
+    <div id="modal-create-task" class="modal-backdrop" style="display: none;">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3>Create Research Task</h3>
+          <button class="modal-close" data-close="modal-create-task">&times;</button>
+        </div>
+        <form id="form-create-task">
+          <div class="form-group">
+            <label for="new-task-title">Task Title</label>
+            <input type="text" id="new-task-title" required placeholder="e.g. Conduct Survey on Transformer Pruning" />
+          </div>
+          <div class="form-group">
+            <label for="new-task-desc">Task Description & Deliverables</label>
+            <textarea id="new-task-desc" rows="3" placeholder="Methodology, benchmarks, target papers..."></textarea>
+          </div>
+          <div class="form-group">
+            <label for="new-task-student">Assign Student (Optional)</label>
+            <select id="new-task-student">
+              <option value="">-- Unassigned --</option>
+            </select>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close="modal-create-task">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create Task</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Add Student to Project -->
+    <div id="modal-add-member" class="modal-backdrop" style="display: none;">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3>Assign Student to Project</h3>
+          <button class="modal-close" data-close="modal-add-member">&times;</button>
+        </div>
+        <form id="form-add-member">
+          <div class="form-group">
+            <label for="member-student-id">Student User ID</label>
+            <input type="number" id="member-student-id" required placeholder="Enter student user ID (e.g. 2)" />
+            <small class="form-hint">Enter the ID of a registered user with STUDENT role.</small>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-close="modal-add-member">Cancel</button>
+            <button type="submit" class="btn btn-primary">Assign to Project</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

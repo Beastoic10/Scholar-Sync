@@ -60,8 +60,8 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler)
                 )
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints
-                        .requestMatchers("/", "/error").permitAll()
+                        // Public endpoints & static assets
+                        .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/favicon.ico", "/error").permitAll()
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers(
                                 "/v3/api-docs/**",
@@ -72,6 +72,7 @@ public class SecurityConfig {
                         // Role-specific constraints
                         .requestMatchers(HttpMethod.POST, "/api/projects").hasRole("SUPERVISOR")
                         .requestMatchers("/api/projects/**").authenticated()
+                        .requestMatchers("/api/tasks/**").authenticated()
                         // Any other request requires authentication
                         .anyRequest().authenticated()
                 )
