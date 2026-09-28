@@ -27,6 +27,10 @@ public class UnderReviewState implements TaskState {
         }
 
         if (targetState == TaskStateEnum.EXPERIMENTATION) {
+            if (currentUser.getRole() != Role.SUPERVISOR) {
+                throw new TaskAccessDeniedException(
+                    "Only a supervisor can send a task backward from UNDER_REVIEW to EXPERIMENTATION.");
+            }
             task.setCurrentState(TaskStateEnum.EXPERIMENTATION);
             return;
         }

@@ -31,3 +31,8 @@ target/
 ### Logs & Environment ###
 *.log
 .env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example

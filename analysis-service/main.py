@@ -6,9 +6,14 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import requests
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# Ensure .env is loaded from analysis-service, parent workspace, or current working directory
+current_dir = Path(__file__).resolve().parent
+for env_path in [current_dir / ".env", current_dir.parent / ".env", Path.cwd() / ".env"]:
+    if env_path.is_file():
+        load_dotenv(dotenv_path=env_path)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("analysis-service")
@@ -169,36 +174,43 @@ def run_ai_detection(text: str) -> Dict[str, Any]:
             "error": "Document text is empty"
         }
 
-    hf_url = "https://api-inference.huggingface.co/models/roberta-base-openai-detector"
+    hf_endpoints = [
+        "https://router.huggingface.co/hf-inference/models/roberta-base-openai-detector",
+        "https://api-inference.huggingface.co/models/roberta-base-openai-detector"
+    ]
     headers = {
         "Authorization": f"Bearer {hf_token.strip()}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "x-wait-for-model": "true"
     }
 
-    try:
-        response = requests.post(hf_url, headers=headers, json={"inputs": payload_text}, timeout=10)
-        if response.status_code == 200:
-            result_json = response.json()
-            return {
-                "status": "SUCCESS",
-                "result": result_json,
-                "error": None
-            }
-        else:
-            err_msg = f"Hugging Face API returned HTTP {response.status_code}: {response.text}"
-            logger.warning(err_msg)
-            return {
-                "status": "FAILED",
-                "result": None,
-                "error": err_msg
-            }
-    except Exception as e:
-        logger.error(f"Error calling Hugging Face Inference API: {e}")
-        return {
-            "status": "FAILED",
-            "result": None,
-            "error": f"Connection error: {str(e)}"
-        }
+    last_error = None
+    for hf_url in hf_endpoints:
+        try:
+            response = requests.post(hf_url, headers=headers, json={"inputs": payload_text}, timeout=15)
+            if response.status_code == 200:
+                result_json = response.json()
+                logger.info("Hugging Face AI detection inference succeeded using %s", hf_url)
+                return {
+                    "status": "SUCCESS",
+                    "result": result_json,
+                    "error": None
+                }
+            else:
+                last_error = f"Hugging Face API returned HTTP {response.status_code}: {response.text}"
+                logger.warning("HF endpoint %s returned HTTP %s: %s", hf_url, response.status_code, response.text)
+                # If 401 or 403, authentication issue - no need to retry second endpoint
+                if response.status_code in (401, 403):
+                    break
+        except Exception as e:
+            last_error = f"Connection error: {str(e)}"
+            logger.warning("HF endpoint %s connection failed: %s", hf_url, e)
+
+    return {
+        "status": "FAILED",
+        "result": None,
+        "error": last_error or "Hugging Face Inference API failed"
+    }
 
 @app.get("/health")
 def health_check():

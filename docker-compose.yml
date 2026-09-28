@@ -26,9 +26,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Set HF_TOKEN to your Hugging Face API token to enable real AI detection.
+      # Set HF_TOKEN in your .env file or environment to enable real AI detection.
       # Leave empty or omit to run similarity + citation analysis only.
-      HF_TOKEN: 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
+      HF_TOKEN: ${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}
       PORT: 8000
     restart: unless-stopped
     healthcheck:

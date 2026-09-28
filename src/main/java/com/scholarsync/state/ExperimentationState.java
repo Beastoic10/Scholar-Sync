@@ -1,9 +1,11 @@
 package com.scholarsync.state;
 
 import com.scholarsync.entity.ResearchTask;
+import com.scholarsync.entity.Role;
 import com.scholarsync.entity.TaskStateEnum;
 import com.scholarsync.entity.User;
 import com.scholarsync.exception.InvalidTaskTransitionException;
+import com.scholarsync.exception.TaskAccessDeniedException;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -22,6 +24,10 @@ public class ExperimentationState implements TaskState {
         }
 
         if (targetState == TaskStateEnum.LITERATURE_REVIEW) {
+            if (currentUser.getRole() != Role.SUPERVISOR) {
+                throw new TaskAccessDeniedException(
+                    "Only a supervisor can send a task backward from EXPERIMENTATION to LITERATURE_REVIEW.");
+            }
             task.setCurrentState(TaskStateEnum.LITERATURE_REVIEW);
             return;
         }

@@ -296,4 +296,151 @@ public class TaskControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.currentState", is("APPROVED")));
     }
+
+    @Test
+    @DisplayName("Student cannot send task backward — supervisor-only backward transitions")
+    void testStudentCannotSendTaskBackward() throws Exception {
+        String supervisorToken = registerAndGetToken("Prof. Riemann", "riemann@scholarsync.edu", "pass1234", Role.SUPERVISOR);
+        String studentToken = registerAndGetToken("Bernhard Euler", "bernhard@scholarsync.edu", "pass1234", Role.STUDENT);
+
+        MvcResult meResult = mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        Long studentId = objectMapper.readTree(meResult.getResponse().getContentAsString()).get("id").asLong();
+
+        CreateProjectRequest projReq = CreateProjectRequest.builder()
+                .title("Riemann Hypothesis Research")
+                .studentIds(java.util.Collections.singleton(studentId))
+                .build();
+
+        MvcResult projResult = mockMvc.perform(post("/api/projects")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(projReq)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        Long projectId = objectMapper.readTree(projResult.getResponse().getContentAsString()).get("id").asLong();
+
+        MvcResult taskResult = mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                CreateTaskRequest.builder().title("Zeta Function Analysis").assignedStudentId(studentId).build())))
+                .andExpect(status().isCreated())
+                .andReturn();
+        Long taskId = objectMapper.readTree(taskResult.getResponse().getContentAsString()).get("id").asLong();
+
+        // Advance to EXPERIMENTATION via student
+        mockMvc.perform(post("/api/tasks/" + taskId + "/transition")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(TaskTransitionRequest.builder().targetState(TaskStateEnum.LITERATURE_REVIEW).build())))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/tasks/" + taskId + "/transition")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(TaskTransitionRequest.builder().targetState(TaskStateEnum.EXPERIMENTATION).build())))
+                .andExpect(status().isOk());
+
+        // Student attempts backward: EXPERIMENTATION -> LITERATURE_REVIEW — must fail 403
+        mockMvc.perform(post("/api/tasks/" + taskId + "/transition")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(TaskTransitionRequest.builder().targetState(TaskStateEnum.LITERATURE_REVIEW).build())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status", is(403)));
+    }
+
+    @Test
+    @DisplayName("Supervisor can send task backward for revision")
+    void testSupervisorCanSendTaskBackward() throws Exception {
+        String supervisorToken = registerAndGetToken("Prof. Cauchy", "cauchy@scholarsync.edu", "pass1234", Role.SUPERVISOR);
+        String studentToken = registerAndGetToken("Abel Student", "abel@scholarsync.edu", "pass1234", Role.STUDENT);
+
+        MvcResult meResult = mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        Long studentId = objectMapper.readTree(meResult.getResponse().getContentAsString()).get("id").asLong();
+
+        MvcResult projResult = mockMvc.perform(post("/api/projects")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(CreateProjectRequest.builder()
+                                .title("Complex Analysis").studentIds(java.util.Collections.singleton(studentId)).build())))
+                .andExpect(status().isCreated())
+                .andReturn();
+        Long projectId = objectMapper.readTree(projResult.getResponse().getContentAsString()).get("id").asLong();
+
+        MvcResult taskResult = mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                CreateTaskRequest.builder().title("Contour Integration").assignedStudentId(studentId).build())))
+                .andExpect(status().isCreated())
+                .andReturn();
+        Long taskId = objectMapper.readTree(taskResult.getResponse().getContentAsString()).get("id").asLong();
+
+        // Student advances to EXPERIMENTATION
+        mockMvc.perform(post("/api/tasks/" + taskId + "/transition")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(TaskTransitionRequest.builder().targetState(TaskStateEnum.LITERATURE_REVIEW).build())))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/tasks/" + taskId + "/transition")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(TaskTransitionRequest.builder().targetState(TaskStateEnum.EXPERIMENTATION).build())))
+                .andExpect(status().isOk());
+
+        // Supervisor sends back EXPERIMENTATION -> LITERATURE_REVIEW for revision — must succeed 200
+        mockMvc.perform(post("/api/tasks/" + taskId + "/transition")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(TaskTransitionRequest.builder().targetState(TaskStateEnum.LITERATURE_REVIEW).build())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentState", is("LITERATURE_REVIEW")));
+    }
+
+    @Test
+    @DisplayName("State skip is rejected: PROPOSED -> EXPERIMENTATION returns 400")
+    void testStateSkipIsRejected() throws Exception {
+        String supervisorToken = registerAndGetToken("Prof. Fermat", "fermat@scholarsync.edu", "pass1234", Role.SUPERVISOR);
+        String studentToken = registerAndGetToken("Pierre Wiles", "wiles@scholarsync.edu", "pass1234", Role.STUDENT);
+
+        MvcResult meResult = mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andReturn();
+        Long studentId = objectMapper.readTree(meResult.getResponse().getContentAsString()).get("id").asLong();
+
+        MvcResult projResult = mockMvc.perform(post("/api/projects")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(CreateProjectRequest.builder()
+                                .title("Number Theory").studentIds(java.util.Collections.singleton(studentId)).build())))
+                .andExpect(status().isCreated())
+                .andReturn();
+        Long projectId = objectMapper.readTree(projResult.getResponse().getContentAsString()).get("id").asLong();
+
+        MvcResult taskResult = mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                CreateTaskRequest.builder().title("Fermat's Last Theorem").assignedStudentId(studentId).build())))
+                .andExpect(status().isCreated())
+                .andReturn();
+        Long taskId = objectMapper.readTree(taskResult.getResponse().getContentAsString()).get("id").asLong();
+
+        // Attempt to skip PROPOSED -> EXPERIMENTATION — must fail 400
+        mockMvc.perform(post("/api/tasks/" + taskId + "/transition")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(TaskTransitionRequest.builder().targetState(TaskStateEnum.EXPERIMENTATION).build())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error", is("INVALID_TASK_TRANSITION")));
+    }
 }

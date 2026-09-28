@@ -32,11 +32,52 @@ const COLUMNS: ColDef[] = [
   { state: 'APPROVED',         title: 'Approved',         accent: '#34d399', glow: 'rgba(52,211,153,0.18)' },
 ];
 
+/**
+ * Validates whether a state transition is permitted according to the strict state flow:
+ * PROPOSED → LITERATURE_REVIEW → EXPERIMENTATION → UNDER_REVIEW → APPROVED
+ * - Students cannot skip states or approve tasks (UNDER_REVIEW → APPROVED is supervisor only).
+ * - Students cannot perform backward transitions.
+ * - Supervisor can perform backward transitions (for revision) and UNDER_REVIEW → APPROVED.
+ */
+export const isValidTransition = (
+  fromState: TaskStateEnum,
+  toState: TaskStateEnum,
+  isSupervisor: boolean
+): boolean => {
+  if (fromState === toState) return false;
+  switch (fromState) {
+    case 'PROPOSED':
+      return toState === 'LITERATURE_REVIEW';
+    case 'LITERATURE_REVIEW':
+      return toState === 'EXPERIMENTATION' || (isSupervisor && toState === 'PROPOSED');
+    case 'EXPERIMENTATION':
+      return toState === 'UNDER_REVIEW' || (isSupervisor && toState === 'LITERATURE_REVIEW');
+    case 'UNDER_REVIEW':
+      return isSupervisor && (toState === 'APPROVED' || toState === 'EXPERIMENTATION');
+    case 'APPROVED':
+    default:
+      return false;
+  }
+};
+
+/**
+ * Checks if a task can be dragged by the current user:
+ * - Tasks in APPROVED cannot be dragged (terminal state).
+ * - Tasks in UNDER_REVIEW cannot be dragged by students (students cannot approve or send back).
+ */
+export const canDragTask = (task: Task, isSupervisor: boolean): boolean => {
+  if (task.currentState === 'APPROVED') return false;
+  if (task.currentState === 'UNDER_REVIEW' && !isSupervisor) return false;
+  return true;
+};
+
 export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
   project, tasks, currentUser, onBack, onRefreshTasks,
   onOpenAssignStudent, onOpenCreateTask, onOpenDeliverables,
 }) => {
   const [transitioningId, setTransitioningId] = useState<number | null>(null);
+  const [draggedTask, setDraggedTask] = useState<Task | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<TaskStateEnum | null>(null);
   const isSupervisor = currentUser.role === 'SUPERVISOR';
 
   const handleTransition = async (taskId: number, targetState: TaskStateEnum) => {
@@ -122,8 +163,59 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
       }}>
         {COLUMNS.map((col) => {
           const colTasks = tasks.filter((t) => t.currentState === col.state);
+          const isDropTargetValid = draggedTask
+            ? isValidTransition(draggedTask.currentState, col.state, isSupervisor)
+            : false;
+          const isCurrentDragOver = dragOverCol === col.state && isDropTargetValid;
+
           return (
-            <div key={col.state} className="kanban-col animate-fade-up">
+            <div
+              key={col.state}
+              className="kanban-col animate-fade-up"
+              onDragOver={(e) => {
+                // Strict UI drag prevention:
+                // Only preventDefault if the transition to this column is valid!
+                if (draggedTask && isValidTransition(draggedTask.currentState, col.state, isSupervisor)) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dragOverCol !== col.state) {
+                    setDragOverCol(col.state);
+                  }
+                } else {
+                  // Prohibit drop on invalid column (displays forbidden 🚫 cursor)
+                  e.dataTransfer.dropEffect = 'none';
+                }
+              }}
+              onDragLeave={(e) => {
+                // Prevent flicker when leaving to a child element inside the column
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  if (dragOverCol === col.state) {
+                    setDragOverCol(null);
+                  }
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOverCol(null);
+                if (!draggedTask) return;
+                // Strict client-side check: prevent invalid drops without firing backend requests or showing errors
+                if (!isValidTransition(draggedTask.currentState, col.state, isSupervisor)) {
+                  setDraggedTask(null);
+                  return;
+                }
+                const taskId = draggedTask.id;
+                setDraggedTask(null);
+                handleTransition(taskId, col.state);
+              }}
+              style={{
+                outline: isCurrentDragOver
+                  ? `2px dashed ${col.accent}`
+                  : (draggedTask && isDropTargetValid ? `1px dashed ${col.accent}60` : undefined),
+                outlineOffset: -2,
+                boxShadow: isCurrentDragOver ? `0 0 16px ${col.glow}` : undefined,
+                transition: 'outline 0.15s ease, box-shadow 0.15s ease',
+              }}
+            >
               {/* Column header */}
               <div style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -154,9 +246,15 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
                     col={col}
                     isSupervisor={isSupervisor}
                     transitioningId={transitioningId}
+                    isDragging={draggedTask?.id === task.id}
                     onTransition={handleTransition}
                     onDelete={handleDeleteTask}
                     onOpenDeliverables={onOpenDeliverables}
+                    onDragStart={(t) => setDraggedTask(t)}
+                    onDragEnd={() => {
+                      setDraggedTask(null);
+                      setDragOverCol(null);
+                    }}
                   />
                 ))}
                 {colTasks.length === 0 && (
@@ -179,21 +277,47 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
 
 /* ─── Task Card ────────────────────────────────────────────────── */
 function TaskCard({
-  task, col, isSupervisor, transitioningId,
-  onTransition, onDelete, onOpenDeliverables,
+  task, col, isSupervisor, transitioningId, isDragging,
+  onTransition, onDelete, onOpenDeliverables, onDragStart, onDragEnd,
 }: {
   task: Task;
   col: ColDef;
   isSupervisor: boolean;
   transitioningId: number | null;
+  isDragging: boolean;
   onTransition: (id: number, state: TaskStateEnum) => void;
   onDelete: (id: number) => void;
   onOpenDeliverables: (task: Task) => void;
+  onDragStart: (task: Task) => void;
+  onDragEnd: () => void;
 }) {
   const busy = transitioningId === task.id;
+  const draggable = canDragTask(task, isSupervisor) && !busy;
 
   return (
-    <div className="kanban-card" style={{ position: 'relative', borderLeft: `2px solid ${col.accent}50` }}>
+    <div
+      className="kanban-card"
+      draggable={draggable}
+      onDragStart={(e) => {
+        if (!draggable) {
+          e.preventDefault();
+          return;
+        }
+        e.dataTransfer.setData('text/plain', String(task.id));
+        e.dataTransfer.effectAllowed = 'move';
+        onDragStart(task);
+      }}
+      onDragEnd={() => {
+        onDragEnd();
+      }}
+      style={{
+        position: 'relative',
+        borderLeft: `2px solid ${col.accent}50`,
+        cursor: draggable ? 'grab' : 'default',
+        opacity: busy ? 0.5 : (isDragging ? 0.35 : 1),
+        transition: 'opacity 0.15s ease, transform 0.15s ease',
+      }}
+    >
       {/* Title */}
       <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f0f6ff', lineHeight: 1.35, marginBottom: '0.35rem' }}>
         {task.title}
@@ -263,14 +387,14 @@ function TaskCard({
           )}
 
           {task.currentState === 'LITERATURE_REVIEW' && (<>
-            <BackBtn disabled={busy} onClick={() => onTransition(task.id, 'PROPOSED')} />
+            {isSupervisor && <BackBtn disabled={busy} onClick={() => onTransition(task.id, 'PROPOSED')} title="Send back to Proposed" />}
             <TransBtn disabled={busy} color="#fbbf24" onClick={() => onTransition(task.id, 'EXPERIMENTATION')}>
               Experiment <ArrowRight size={10} />
             </TransBtn>
           </>)}
 
           {task.currentState === 'EXPERIMENTATION' && (<>
-            <BackBtn disabled={busy} onClick={() => onTransition(task.id, 'LITERATURE_REVIEW')} />
+            {isSupervisor && <BackBtn disabled={busy} onClick={() => onTransition(task.id, 'LITERATURE_REVIEW')} title="Send back to Lit. Review" />}
             <TransBtn disabled={busy} color="#fb923c" onClick={() => onTransition(task.id, 'UNDER_REVIEW')}>
               Review <ArrowRight size={10} />
             </TransBtn>
@@ -278,7 +402,7 @@ function TaskCard({
 
           {task.currentState === 'UNDER_REVIEW' && (
             isSupervisor ? (<>
-              <BackBtn disabled={busy} onClick={() => onTransition(task.id, 'EXPERIMENTATION')} />
+              <BackBtn disabled={busy} onClick={() => onTransition(task.id, 'EXPERIMENTATION')} title="Send back to Experimentation" />
               <TransBtn disabled={busy} color="#34d399" onClick={() => onTransition(task.id, 'APPROVED')}>
                 <CheckCircle2 size={10} /> Approve
               </TransBtn>
@@ -320,12 +444,12 @@ function TransBtn({ children, color, disabled, onClick }: { children: React.Reac
   );
 }
 
-function BackBtn({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
+function BackBtn({ disabled, onClick, title }: { disabled: boolean; onClick: () => void; title?: string }) {
   return (
     <button
       disabled={disabled}
       onClick={onClick}
-      title="Go back"
+      title={title || "Go back"}
       style={{
         background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
         borderRadius: 7, padding: '0.2rem 0.35rem', cursor: 'pointer',
