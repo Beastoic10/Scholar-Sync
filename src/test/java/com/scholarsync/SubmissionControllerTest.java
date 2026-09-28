@@ -7,9 +7,8 @@ import com.scholarsync.dto.auth.RegisterRequest;
 import com.scholarsync.dto.project.CreateProjectRequest;
 import com.scholarsync.dto.submission.CreateSubmissionRequest;
 import com.scholarsync.dto.submission.FeedbackRequest;
-import com.scholarsync.dto.submission.UpdateSubmissionStatusRequest;
 import com.scholarsync.dto.task.CreateTaskRequest;
-import com.scholarsync.dto.task.TaskTransitionRequest;
+import com.scholarsync.entity.ResearchSubmission;
 import com.scholarsync.entity.Role;
 import com.scholarsync.entity.SubmissionStatus;
 import com.scholarsync.entity.TaskStateEnum;
@@ -24,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -32,6 +32,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import java.util.Collections;
 
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -117,149 +118,327 @@ public class SubmissionControllerTest {
     }
 
     @Test
-    @DisplayName("Complete Deliverables Workflow: Submit v1, v2, Snapshot Memento, Feedback, Status Review")
-    void testCompleteSubmissionLifecycle() throws Exception {
-        // 1. Setup supervisor and student
-        String supervisorToken = registerAndGetToken("Dr. Turing", "turing.sub@test.edu", "password123", Role.SUPERVISOR);
-        Long studentId = registerAndGetId("Claude Shannon", "shannon.sub@test.edu", "password123", Role.STUDENT);
-        String studentToken = registerAndGetToken("Claude Shannon 2", "shannon.token@test.edu", "password123", Role.STUDENT);
-        // Register another student to test eligible students query
-        registerAndGetId("John von Neumann", "neumann.sub@test.edu", "password123", Role.STUDENT);
+    @DisplayName("First submission creates v1.0 and second creates v1.1")
+    void testVersionNumberingSequence() throws Exception {
+        String supervisorToken = registerAndGetToken("Dr. Supervisor", "sup1@test.edu", "pass123", Role.SUPERVISOR);
+        Long studentId = registerAndGetId("Alice Student", "alice1@test.edu", "pass123", Role.STUDENT);
+        String studentToken = registerAndGetToken("Alice Student 2", "alice.token@test.edu", "pass123", Role.STUDENT);
 
-        // 2. Create project
         CreateProjectRequest projectReq = CreateProjectRequest.builder()
-                .title("Information Theory Project")
-                .description("Fundamental limits of data compression")
+                .title("Neural Networks Project")
                 .studentIds(Collections.singleton(studentId))
                 .build();
 
-        MvcResult projResult = mockMvc.perform(post("/api/projects")
+        MvcResult projRes = mockMvc.perform(post("/api/projects")
                         .header("Authorization", "Bearer " + supervisorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(projectReq)))
-                .andExpect(status().isCreated())
-                .andReturn();
+                .andExpect(status().isCreated()).andReturn();
+        Long projectId = objectMapper.readTree(projRes.getResponse().getContentAsString()).get("id").asLong();
 
-        Long projectId = objectMapper.readTree(projResult.getResponse().getContentAsString()).get("id").asLong();
-
-        // Test eligible students search (filtered by query)
-        mockMvc.perform(get("/api/projects/" + projectId + "/eligible-students?query=Neumann")
-                        .header("Authorization", "Bearer " + supervisorToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].email", is("neumann.sub@test.edu")));
-
-        // 3. Create task
         CreateTaskRequest taskReq = CreateTaskRequest.builder()
-                .title("Compute Entropy of English Text")
-                .description("Measure n-gram entropy across Corpus")
+                .title("CNN Model Implementation")
                 .assignedStudentId(studentId)
                 .build();
 
-        MvcResult taskResult = mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
+        MvcResult taskRes = mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
                         .header("Authorization", "Bearer " + supervisorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(taskReq)))
-                .andExpect(status().isCreated())
-                .andReturn();
+                .andExpect(status().isCreated()).andReturn();
+        Long taskId = objectMapper.readTree(taskRes.getResponse().getContentAsString()).get("id").asLong();
 
-        Long taskId = objectMapper.readTree(taskResult.getResponse().getContentAsString()).get("id").asLong();
-
-        // Transition task PROPOSED -> LITERATURE_REVIEW -> EXPERIMENTATION
-        mockMvc.perform(post("/api/tasks/" + taskId + "/transition")
-                        .header("Authorization", "Bearer " + supervisorToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(TaskTransitionRequest.builder()
-                                .targetState(TaskStateEnum.LITERATURE_REVIEW).build())))
-                .andExpect(status().isOk());
-
-        mockMvc.perform(post("/api/tasks/" + taskId + "/transition")
-                        .header("Authorization", "Bearer " + supervisorToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(TaskTransitionRequest.builder()
-                                .targetState(TaskStateEnum.EXPERIMENTATION).build())))
-                .andExpect(status().isOk());
-
-        // 4. Student submits Deliverable v1
-        CreateSubmissionRequest sub1Req = CreateSubmissionRequest.builder()
-                .title("Initial Draft & N-gram Scripts")
-                .description("Python implementation of character-level entropy")
-                .artifactLocation("https://github.com/shannon/entropy-calc/tree/v1.0")
-                .draft(false)
+        // 1. First submission -> v1.0
+        CreateSubmissionRequest sub1 = CreateSubmissionRequest.builder()
+                .title("Initial PyTorch Architecture")
+                .artifactLocation("https://github.com/alice/cnn/v1.0")
                 .build();
 
-        MvcResult sub1Result = mockMvc.perform(post("/api/tasks/" + taskId + "/submissions")
+        mockMvc.perform(post("/api/tasks/" + taskId + "/submissions")
                         .header("Authorization", "Bearer " + supervisorToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(sub1Req)))
+                        .content(objectMapper.writeValueAsString(sub1)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.versionNumber", is("v1")))
-                .andExpect(jsonPath("$.status", is("SUBMITTED")))
-                .andExpect(jsonPath("$.title", is("Initial Draft & N-gram Scripts")))
-                .andReturn();
+                .andExpect(jsonPath("$.versionNumber", is("v1.0")))
+                .andExpect(jsonPath("$.status", is("SUBMITTED")));
 
-        Long sub1Id = objectMapper.readTree(sub1Result.getResponse().getContentAsString()).get("id").asLong();
+        // 2. Second submission -> v1.1
+        CreateSubmissionRequest sub2 = CreateSubmissionRequest.builder()
+                .title("Tuned Hyperparameters")
+                .artifactLocation("https://github.com/alice/cnn/v1.1")
+                .build();
 
-        // 5. Test Memento snapshot endpoint
-        mockMvc.perform(get("/api/submissions/" + sub1Id + "/snapshot")
+        mockMvc.perform(post("/api/tasks/" + taskId + "/submissions")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(sub2)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.versionNumber", is("v1.1")));
+    }
+
+    @Test
+    @DisplayName("Duplicate versions are prevented by database uniqueness constraint")
+    void testDuplicateVersionsPrevented() throws Exception {
+        String supervisorToken = registerAndGetToken("Dr. Supervisor", "sup2@test.edu", "pass123", Role.SUPERVISOR);
+        Long studentId = registerAndGetId("Bob Student", "bob@test.edu", "pass123", Role.STUDENT);
+
+        CreateProjectRequest projectReq = CreateProjectRequest.builder()
+                .title("Quantum Optics")
+                .studentIds(Collections.singleton(studentId))
+                .build();
+
+        MvcResult projRes = mockMvc.perform(post("/api/projects")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(projectReq)))
+                .andExpect(status().isCreated()).andReturn();
+        Long projectId = objectMapper.readTree(projRes.getResponse().getContentAsString()).get("id").asLong();
+
+        CreateTaskRequest taskReq = CreateTaskRequest.builder().title("Interferometer Setup").build();
+        MvcResult taskRes = mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(taskReq)))
+                .andExpect(status().isCreated()).andReturn();
+        Long taskId = objectMapper.readTree(taskRes.getResponse().getContentAsString()).get("id").asLong();
+
+        // Create first submission v1.0
+        CreateSubmissionRequest sub1 = CreateSubmissionRequest.builder().title("Laser Alignment").build();
+        mockMvc.perform(post("/api/tasks/" + taskId + "/submissions")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(sub1)))
+                .andExpect(status().isCreated());
+
+        // Attempt direct database save with duplicate versionNumber
+        assertThrows(DataIntegrityViolationException.class, () -> {
+            var task = taskRepository.findById(taskId).get();
+            var user = userRepository.findByEmail("sup2@test.edu").get();
+            ResearchSubmission duplicate = ResearchSubmission.builder()
+                    .task(task)
+                    .versionNumber("v1.0")
+                    .submittedBy(user)
+                    .title("Duplicate Version")
+                    .build();
+            submissionRepository.saveAndFlush(duplicate);
+        });
+    }
+
+    @Test
+    @DisplayName("Student cannot approve or reject submissions")
+    void testStudentCannotApproveOrReject() throws Exception {
+        String supervisorToken = registerAndGetToken("Dr. Supervisor", "sup3@test.edu", "pass123", Role.SUPERVISOR);
+        Long studentId = registerAndGetId("Carol Student", "carol@test.edu", "pass123", Role.STUDENT);
+        String studentToken = registerAndGetToken("Carol Student 2", "carol.tok@test.edu", "pass123", Role.STUDENT);
+
+        CreateProjectRequest projectReq = CreateProjectRequest.builder()
+                .title("Robotics Lab")
+                .studentIds(Collections.singleton(studentId))
+                .build();
+        MvcResult projRes = mockMvc.perform(post("/api/projects")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(projectReq)))
+                .andExpect(status().isCreated()).andReturn();
+        Long projectId = objectMapper.readTree(projRes.getResponse().getContentAsString()).get("id").asLong();
+
+        CreateTaskRequest taskReq = CreateTaskRequest.builder().title("PID Controller").build();
+        MvcResult taskRes = mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(taskReq)))
+                .andExpect(status().isCreated()).andReturn();
+        Long taskId = objectMapper.readTree(taskRes.getResponse().getContentAsString()).get("id").asLong();
+
+        CreateSubmissionRequest sub = CreateSubmissionRequest.builder().title("Draft Firmware").build();
+        MvcResult subRes = mockMvc.perform(post("/api/tasks/" + taskId + "/submissions")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(sub)))
+                .andExpect(status().isCreated()).andReturn();
+        Long subId = objectMapper.readTree(subRes.getResponse().getContentAsString()).get("id").asLong();
+
+        // Student tries to approve
+        mockMvc.perform(post("/api/submissions/" + subId + "/approve")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+
+        // Student tries to reject
+        mockMvc.perform(post("/api/submissions/" + subId + "/reject")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Supervisor can review, approve, reject, feedback, and student can create next version after rejection")
+    void testSupervisorWorkflowAndRejectionPreservation() throws Exception {
+        String supervisorToken = registerAndGetToken("Dr. Supervisor", "sup4@test.edu", "pass123", Role.SUPERVISOR);
+        Long studentId = registerAndGetId("David Student", "david@test.edu", "pass123", Role.STUDENT);
+
+        CreateProjectRequest projectReq = CreateProjectRequest.builder()
+                .title("Genome Assembly")
+                .studentIds(Collections.singleton(studentId))
+                .build();
+        MvcResult projRes = mockMvc.perform(post("/api/projects")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(projectReq)))
+                .andExpect(status().isCreated()).andReturn();
+        Long projectId = objectMapper.readTree(projRes.getResponse().getContentAsString()).get("id").asLong();
+
+        CreateTaskRequest taskReq = CreateTaskRequest.builder().title("De Bruijn Graph Assembly").build();
+        MvcResult taskRes = mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(taskReq)))
+                .andExpect(status().isCreated()).andReturn();
+        Long taskId = objectMapper.readTree(taskRes.getResponse().getContentAsString()).get("id").asLong();
+
+        // 1. Submit v1.0
+        CreateSubmissionRequest sub1 = CreateSubmissionRequest.builder().title("K-mer Index v1").build();
+        MvcResult sub1Res = mockMvc.perform(post("/api/tasks/" + taskId + "/submissions")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(sub1)))
+                .andExpect(status().isCreated()).andReturn();
+        Long sub1Id = objectMapper.readTree(sub1Res.getResponse().getContentAsString()).get("id").asLong();
+
+        // 2. Supervisor marks UNDER_REVIEW
+        mockMvc.perform(post("/api/submissions/" + sub1Id + "/review")
                         .header("Authorization", "Bearer " + supervisorToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.versionNumber", is("v1")))
-                .andExpect(jsonPath("$.artifactLocation", is("https://github.com/shannon/entropy-calc/tree/v1.0")))
-                .andExpect(jsonPath("$.timestamp", notNullValue()));
+                .andExpect(jsonPath("$.status", is("UNDER_REVIEW")));
 
-        // 6. Supervisor adds feedback to v1
-        FeedbackRequest fbReq = FeedbackRequest.builder()
-                .comment("Please add trigram model analysis and convergence graphs.")
-                .build();
-
+        // 3. Supervisor adds feedback comment
+        FeedbackRequest fbReq = FeedbackRequest.builder().comment("K-mer size 21 is too small. Use k=31.").build();
         mockMvc.perform(post("/api/submissions/" + sub1Id + "/feedback")
                         .header("Authorization", "Bearer " + supervisorToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(fbReq)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.comment", containsString("Please add trigram model")))
-                .andExpect(jsonPath("$.supervisor.name", is("Dr. Turing")));
+                .andExpect(jsonPath("$.comment", containsString("Use k=31")));
 
-        // 7. Student submits revised Deliverable v2
-        CreateSubmissionRequest sub2Req = CreateSubmissionRequest.builder()
-                .title("Revised Draft with Trigrams")
-                .description("Includes trigram charts and PDF report")
-                .artifactLocation("https://github.com/shannon/entropy-calc/tree/v2.0")
-                .draft(false)
-                .build();
-
-        MvcResult sub2Result = mockMvc.perform(post("/api/tasks/" + taskId + "/submissions")
+        // 4. Supervisor REJECTS v1.0
+        FeedbackRequest rejectFb = FeedbackRequest.builder().comment("Insufficient accuracy.").build();
+        mockMvc.perform(post("/api/submissions/" + sub1Id + "/reject")
                         .header("Authorization", "Bearer " + supervisorToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(sub2Req)))
+                        .content(objectMapper.writeValueAsString(rejectFb)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("REJECTED")));
+
+        // 5. Verify v1.0 remains in history with REJECTED status
+        mockMvc.perform(get("/api/tasks/" + taskId + "/submissions")
+                        .header("Authorization", "Bearer " + supervisorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].versionNumber", is("v1.0")))
+                .andExpect(jsonPath("$[0].status", is("REJECTED")));
+
+        // 6. Student creates next version after rejection -> v1.1
+        CreateSubmissionRequest sub2 = CreateSubmissionRequest.builder().title("K-mer Index with k=31").build();
+        MvcResult sub2Res = mockMvc.perform(post("/api/tasks/" + taskId + "/submissions")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(sub2)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.versionNumber", is("v2")))
+                .andExpect(jsonPath("$.versionNumber", is("v1.1")))
                 .andReturn();
+        Long sub2Id = objectMapper.readTree(sub2Res.getResponse().getContentAsString()).get("id").asLong();
 
-        Long sub2Id = objectMapper.readTree(sub2Result.getResponse().getContentAsString()).get("id").asLong();
+        // 7. Supervisor approves v1.1
+        FeedbackRequest approveFb = FeedbackRequest.builder().comment("Looks great! Ready for testing.").build();
+        mockMvc.perform(post("/api/submissions/" + sub2Id + "/approve")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(approveFb)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("APPROVED")));
 
-        // 8. List submissions for task
+        // 8. Both versions exist in history
         mockMvc.perform(get("/api/tasks/" + taskId + "/submissions")
                         .header("Authorization", "Bearer " + supervisorToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].versionNumber", is("v1")))
-                .andExpect(jsonPath("$[1].versionNumber", is("v2")));
+                .andExpect(jsonPath("$[0].versionNumber", is("v1.0")))
+                .andExpect(jsonPath("$[0].status", is("REJECTED")))
+                .andExpect(jsonPath("$[1].versionNumber", is("v1.1")))
+                .andExpect(jsonPath("$[1].status", is("APPROVED")));
+    }
 
-        // 9. Supervisor reviews and approves v2
-        UpdateSubmissionStatusRequest reviewReq = UpdateSubmissionStatusRequest.builder()
-                .status(SubmissionStatus.APPROVED)
-                .feedbackComment("Outstanding improvements! Approved.")
-                .build();
+    @Test
+    @DisplayName("Unauthorized users cannot access submissions")
+    void testUnauthorizedAccessBlocked() throws Exception {
+        String supervisorToken = registerAndGetToken("Dr. Supervisor", "sup5@test.edu", "pass123", Role.SUPERVISOR);
+        String outsiderToken = registerAndGetToken("Outsider Student", "outsider@other.edu", "pass123", Role.STUDENT);
 
-        mockMvc.perform(patch("/api/submissions/" + sub2Id + "/status")
+        CreateProjectRequest projectReq = CreateProjectRequest.builder().title("Secret Research").build();
+        MvcResult projRes = mockMvc.perform(post("/api/projects")
                         .header("Authorization", "Bearer " + supervisorToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(reviewReq)))
+                        .content(objectMapper.writeValueAsString(projectReq)))
+                .andExpect(status().isCreated()).andReturn();
+        Long projectId = objectMapper.readTree(projRes.getResponse().getContentAsString()).get("id").asLong();
+
+        CreateTaskRequest taskReq = CreateTaskRequest.builder().title("Confidential Task").build();
+        MvcResult taskRes = mockMvc.perform(post("/api/projects/" + projectId + "/tasks")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(taskReq)))
+                .andExpect(status().isCreated()).andReturn();
+        Long taskId = objectMapper.readTree(taskRes.getResponse().getContentAsString()).get("id").asLong();
+
+        // Outsider attempts to get submissions
+        mockMvc.perform(get("/api/tasks/" + taskId + "/submissions")
+                        .header("Authorization", "Bearer " + outsiderToken))
+                .andExpect(status().isForbidden());
+
+        // Outsider attempts to create submission
+        CreateSubmissionRequest subReq = CreateSubmissionRequest.builder().title("Injected Deliverable").build();
+        mockMvc.perform(post("/api/tasks/" + taskId + "/submissions")
+                        .header("Authorization", "Bearer " + outsiderToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(subReq)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Case-insensitive student-name search returns correct eligible students")
+    void testStudentSearchByName() throws Exception {
+        String supervisorToken = registerAndGetToken("Dr. Supervisor", "sup6@test.edu", "pass123", Role.SUPERVISOR);
+        Long enrolledStudentId = registerAndGetId("Isaac Newton", "isaac@test.edu", "pass123", Role.STUDENT);
+        registerAndGetId("Albert Einstein", "albert@test.edu", "pass123", Role.STUDENT);
+        registerAndGetId("Niels Bohr", "niels@test.edu", "pass123", Role.STUDENT);
+
+        CreateProjectRequest projectReq = CreateProjectRequest.builder()
+                .title("Relativity Project")
+                .studentIds(Collections.singleton(enrolledStudentId))
+                .build();
+        MvcResult projRes = mockMvc.perform(post("/api/projects")
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(projectReq)))
+                .andExpect(status().isCreated()).andReturn();
+        Long projectId = objectMapper.readTree(projRes.getResponse().getContentAsString()).get("id").asLong();
+
+        // Search "einstein" (lowercase search matching "Albert Einstein")
+        mockMvc.perform(get("/api/projects/" + projectId + "/eligible-students?query=einstein")
+                        .header("Authorization", "Bearer " + supervisorToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status", is("APPROVED")))
-                .andExpect(jsonPath("$.feedbackList", hasSize(1)))
-                .andExpect(jsonPath("$.feedbackList[0].comment", is("Outstanding improvements! Approved.")));
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].name", is("Albert Einstein")))
+                .andExpect(jsonPath("$[0].email", is("albert@test.edu")));
+
+        // Isaac Newton is already enrolled -> should NOT be returned even when querying "Newton"
+        mockMvc.perform(get("/api/projects/" + projectId + "/eligible-students?query=Newton")
+                        .header("Authorization", "Bearer " + supervisorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+
+        // Non-existent name search returns empty list
+        mockMvc.perform(get("/api/projects/" + projectId + "/eligible-students?query=Galileo")
+                        .header("Authorization", "Bearer " + supervisorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
     }
 }

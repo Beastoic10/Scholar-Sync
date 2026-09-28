@@ -20,14 +20,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByRole(Role role);
 
     @Query("SELECT u FROM User u WHERE u.role = :role " +
-           "AND (:query IS NULL OR :query = '' OR LOWER(u.name) LIKE LOWER(CONCAT('%', :query, '%'))) " +
+           "AND (:query IS NULL OR TRIM(:query) = '' OR LOWER(u.name) LIKE LOWER(CONCAT('%', TRIM(:query), '%')) OR LOWER(u.email) LIKE LOWER(CONCAT('%', TRIM(:query), '%'))) " +
            "ORDER BY u.name ASC")
     List<User> searchByRoleAndName(@Param("role") Role role, @Param("query") String query);
 
     @Query("SELECT u FROM User u WHERE u.role = com.scholarsync.entity.Role.STUDENT " +
-           "AND (:query IS NULL OR :query = '' OR LOWER(u.name) LIKE LOWER(CONCAT('%', :query, '%'))) " +
-           "AND u NOT IN (SELECT s FROM ResearchProject p JOIN p.students s WHERE p.id = :projectId) " +
+           "AND (:query IS NULL OR TRIM(:query) = '' OR LOWER(u.name) LIKE LOWER(CONCAT('%', TRIM(:query), '%')) OR LOWER(u.email) LIKE LOWER(CONCAT('%', TRIM(:query), '%'))) " +
+           "AND NOT EXISTS (SELECT 1 FROM ResearchProject p JOIN p.students s WHERE p.id = :projectId AND s.id = u.id) " +
            "ORDER BY u.name ASC")
     List<User> searchEligibleStudentsForProject(@Param("projectId") Long projectId, @Param("query") String query);
 }
+
 

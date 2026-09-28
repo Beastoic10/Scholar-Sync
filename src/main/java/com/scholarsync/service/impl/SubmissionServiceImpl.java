@@ -1,6 +1,9 @@
 package com.scholarsync.service.impl;
 
-import com.scholarsync.dto.submission.*;
+import com.scholarsync.dto.submission.CreateSubmissionRequest;
+import com.scholarsync.dto.submission.FeedbackRequest;
+import com.scholarsync.dto.submission.FeedbackResponse;
+import com.scholarsync.dto.submission.SubmissionResponse;
 import com.scholarsync.entity.*;
 import com.scholarsync.exception.BadRequestException;
 import com.scholarsync.exception.ResourceNotFoundException;
@@ -11,8 +14,6 @@ import com.scholarsync.repository.SubmissionFeedbackRepository;
 import com.scholarsync.repository.UserRepository;
 import com.scholarsync.security.UserPrincipal;
 import com.scholarsync.service.SubmissionService;
-import com.scholarsync.state.TaskState;
-import com.scholarsync.state.TaskStateFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
@@ -29,13 +30,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class SubmissionServiceImpl implements SubmissionService {
 
-    private static final Pattern VERSION_PATTERN = Pattern.compile("^v?(\\d+)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern VERSION_PATTERN = Pattern.compile("^v?1\\.(\\d+)$", Pattern.CASE_INSENSITIVE);
 
     private final ResearchSubmissionRepository submissionRepository;
     private final SubmissionFeedbackRepository feedbackRepository;
     private final ResearchTaskRepository taskRepository;
     private final UserRepository userRepository;
-    private final TaskStateFactory stateFactory;
 
     @Override
     @Transactional
@@ -43,7 +43,7 @@ public class SubmissionServiceImpl implements SubmissionService {
         ResearchTask task = taskRepository.findByIdWithDetails(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("ResearchTask", "id", taskId));
 
-        validateTaskProjectAccess(task, currentUser.getId());
+        validateSubmissionCreationAccess(task, currentUser);
 
         User submitter = userRepository.findById(currentUser.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", currentUser.getId()));
@@ -65,20 +65,10 @@ public class SubmissionServiceImpl implements SubmissionService {
                 .build();
 
         ResearchSubmission savedSubmission = submissionRepository.save(submission);
-        log.info("Created submission '{}' ({}) for task id: '{}' by user: '{}'",
-                savedSubmission.getTitle(), nextVersion, taskId, submitter.getEmail());
+        log.info("Created submission '{}' ({}) for task id: '{}' by user: '{}', status: '{}'",
+                savedSubmission.getTitle(), nextVersion, taskId, submitter.getEmail(), initialStatus);
 
-        // If deliverable is submitted and task is in EXPERIMENTATION or LITERATURE_REVIEW,
-        // optionally transition task to UNDER_REVIEW automatically if submitter is student
-        if (initialStatus == SubmissionStatus.SUBMITTED) {
-            if (task.getCurrentState() == TaskStateEnum.EXPERIMENTATION) {
-                TaskState currentStateHandler = stateFactory.getState(task.getCurrentState());
-                task.transitionTo(currentStateHandler, TaskStateEnum.UNDER_REVIEW, submitter);
-                taskRepository.save(task);
-                log.info("Auto-transitioned task id: '{}' to UNDER_REVIEW upon submission {}", taskId, nextVersion);
-            }
-        }
-
+        // Note: Task state is intentionally KEPT SEPARATE from submission status.
         return SubmissionResponse.fromEntity(savedSubmission);
     }
 
@@ -120,6 +110,104 @@ public class SubmissionServiceImpl implements SubmissionService {
 
     @Override
     @Transactional
+    public SubmissionResponse submitDraft(Long submissionId, UserPrincipal currentUser) {
+        ResearchSubmission submission = submissionRepository.findByIdWithDetails(submissionId)
+                .orElseThrow(() -> new ResourceNotFoundException("ResearchSubmission", "id", submissionId));
+
+        if (!submission.getSubmittedBy().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("Only the author of the draft submission can submit it");
+        }
+
+        if (submission.getStatus() != SubmissionStatus.DRAFT) {
+            throw new BadRequestException("Only submissions in DRAFT status can be submitted");
+        }
+
+        submission.setStatus(SubmissionStatus.SUBMITTED);
+        ResearchSubmission updated = submissionRepository.save(submission);
+        log.info("Submission id: '{}' transitioned from DRAFT to SUBMITTED by author: '{}'",
+                submissionId, currentUser.getEmail());
+
+        return SubmissionResponse.fromEntity(updated);
+    }
+
+    @Override
+    @Transactional
+    public SubmissionResponse reviewSubmission(Long submissionId, UserPrincipal currentUser) {
+        ResearchSubmission submission = submissionRepository.findByIdWithDetails(submissionId)
+                .orElseThrow(() -> new ResourceNotFoundException("ResearchSubmission", "id", submissionId));
+
+        validateSupervisorAccess(submission.getTask().getProject(), currentUser.getId());
+
+        submission.setStatus(SubmissionStatus.UNDER_REVIEW);
+        ResearchSubmission updated = submissionRepository.save(submission);
+        log.info("Submission id: '{}' marked as UNDER_REVIEW by supervisor: '{}'",
+                submissionId, currentUser.getEmail());
+
+        return SubmissionResponse.fromEntity(updated);
+    }
+
+    @Override
+    @Transactional
+    public SubmissionResponse approveSubmission(Long submissionId, FeedbackRequest feedbackRequest, UserPrincipal currentUser) {
+        ResearchSubmission submission = submissionRepository.findByIdWithDetails(submissionId)
+                .orElseThrow(() -> new ResourceNotFoundException("ResearchSubmission", "id", submissionId));
+
+        ResearchProject project = submission.getTask().getProject();
+        validateSupervisorAccess(project, currentUser.getId());
+
+        User supervisor = userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", currentUser.getId()));
+
+        submission.setStatus(SubmissionStatus.APPROVED);
+
+        if (feedbackRequest != null && feedbackRequest.getComment() != null && !feedbackRequest.getComment().trim().isEmpty()) {
+            SubmissionFeedback feedback = SubmissionFeedback.builder()
+                    .submission(submission)
+                    .supervisor(supervisor)
+                    .comment(feedbackRequest.getComment().trim())
+                    .build();
+            submission.addFeedback(feedback);
+        }
+
+        ResearchSubmission updated = submissionRepository.save(submission);
+        log.info("Submission id: '{}' APPROVED by supervisor '{}'", submissionId, supervisor.getEmail());
+
+        // Note: Task state is intentionally KEPT SEPARATE from submission status.
+        return SubmissionResponse.fromEntity(updated);
+    }
+
+    @Override
+    @Transactional
+    public SubmissionResponse rejectSubmission(Long submissionId, FeedbackRequest feedbackRequest, UserPrincipal currentUser) {
+        ResearchSubmission submission = submissionRepository.findByIdWithDetails(submissionId)
+                .orElseThrow(() -> new ResourceNotFoundException("ResearchSubmission", "id", submissionId));
+
+        ResearchProject project = submission.getTask().getProject();
+        validateSupervisorAccess(project, currentUser.getId());
+
+        User supervisor = userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", currentUser.getId()));
+
+        submission.setStatus(SubmissionStatus.REJECTED);
+
+        if (feedbackRequest != null && feedbackRequest.getComment() != null && !feedbackRequest.getComment().trim().isEmpty()) {
+            SubmissionFeedback feedback = SubmissionFeedback.builder()
+                    .submission(submission)
+                    .supervisor(supervisor)
+                    .comment(feedbackRequest.getComment().trim())
+                    .build();
+            submission.addFeedback(feedback);
+        }
+
+        ResearchSubmission updated = submissionRepository.save(submission);
+        log.info("Submission id: '{}' REJECTED by supervisor '{}'", submissionId, supervisor.getEmail());
+
+        // Note: Rejected version remains permanently in history.
+        return SubmissionResponse.fromEntity(updated);
+    }
+
+    @Override
+    @Transactional
     public FeedbackResponse addFeedback(Long submissionId, FeedbackRequest request, UserPrincipal currentUser) {
         ResearchSubmission submission = submissionRepository.findByIdWithDetails(submissionId)
                 .orElseThrow(() -> new ResourceNotFoundException("ResearchSubmission", "id", submissionId));
@@ -143,62 +231,52 @@ public class SubmissionServiceImpl implements SubmissionService {
         return FeedbackResponse.fromEntity(saved);
     }
 
-    @Override
-    @Transactional
-    public SubmissionResponse updateSubmissionStatus(Long submissionId, UpdateSubmissionStatusRequest request, UserPrincipal currentUser) {
-        ResearchSubmission submission = submissionRepository.findByIdWithDetails(submissionId)
-                .orElseThrow(() -> new ResourceNotFoundException("ResearchSubmission", "id", submissionId));
-
-        ResearchProject project = submission.getTask().getProject();
-        validateSupervisorAccess(project, currentUser.getId());
-
-        User supervisor = userRepository.findById(currentUser.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("User", "id", currentUser.getId()));
-
-        submission.setStatus(request.getStatus());
-
-        if (request.getFeedbackComment() != null && !request.getFeedbackComment().trim().isEmpty()) {
-            SubmissionFeedback feedback = SubmissionFeedback.builder()
-                    .submission(submission)
-                    .supervisor(supervisor)
-                    .comment(request.getFeedbackComment().trim())
-                    .build();
-            submission.addFeedback(feedback);
-        }
-
-        // If supervisor approved submission and task is under review, transition task to APPROVED
-        ResearchTask task = submission.getTask();
-        if (request.getStatus() == SubmissionStatus.APPROVED && task.getCurrentState() == TaskStateEnum.UNDER_REVIEW) {
-            TaskState currentStateHandler = stateFactory.getState(task.getCurrentState());
-            task.transitionTo(currentStateHandler, TaskStateEnum.APPROVED, supervisor);
-            taskRepository.save(task);
-            log.info("Task id: '{}' transitioned to APPROVED following submission approval", task.getId());
-        }
-
-        ResearchSubmission updated = submissionRepository.save(submission);
-        log.info("Updated submission id: '{}' status to '{}' by supervisor '{}'",
-                submissionId, request.getStatus(), supervisor.getEmail());
-
-        return SubmissionResponse.fromEntity(updated);
-    }
-
     private String computeNextVersion(Long taskId) {
         List<String> versionNumbers = submissionRepository.findVersionNumbersByTaskId(taskId);
-        int maxVer = 0;
+        if (versionNumbers == null || versionNumbers.isEmpty()) {
+            return "v1.0";
+        }
+
+        int maxMinor = -1;
         for (String v : versionNumbers) {
             if (v != null) {
                 Matcher matcher = VERSION_PATTERN.matcher(v.trim());
                 if (matcher.matches()) {
                     try {
-                        int num = Integer.parseInt(matcher.group(1));
-                        if (num > maxVer) {
-                            maxVer = num;
+                        int minor = Integer.parseInt(matcher.group(1));
+                        if (minor > maxMinor) {
+                            maxMinor = minor;
                         }
                     } catch (NumberFormatException ignored) {}
                 }
             }
         }
-        return "v" + (maxVer + 1);
+
+        if (maxMinor == -1) {
+            return "v1." + versionNumbers.size();
+        }
+        return "v1." + (maxMinor + 1);
+    }
+
+    private void validateSubmissionCreationAccess(ResearchTask task, UserPrincipal currentUser) {
+        ResearchProject project = task.getProject();
+        boolean isSupervisor = project.getSupervisor().getId().equals(currentUser.getId());
+        if (isSupervisor) {
+            return;
+        }
+
+        if (currentUser.getRole() != Role.STUDENT) {
+            throw new AccessDeniedException("Only students or the project supervisor can create submissions");
+        }
+
+        boolean isMember = project.getStudents().stream().anyMatch(s -> s.getId().equals(currentUser.getId()));
+        if (!isMember) {
+            throw new TaskAccessDeniedException("You are not an enrolled student in this project");
+        }
+
+        if (task.getAssignedStudent() != null && !task.getAssignedStudent().getId().equals(currentUser.getId())) {
+            throw new TaskAccessDeniedException("You can only create submissions for tasks assigned to you");
+        }
     }
 
     private void validateTaskProjectAccess(ResearchTask task, Long userId) {

@@ -4,7 +4,6 @@ import com.scholarsync.dto.submission.CreateSubmissionRequest;
 import com.scholarsync.dto.submission.FeedbackRequest;
 import com.scholarsync.dto.submission.FeedbackResponse;
 import com.scholarsync.dto.submission.SubmissionResponse;
-import com.scholarsync.dto.submission.UpdateSubmissionStatusRequest;
 import com.scholarsync.entity.SubmissionSnapshot;
 import com.scholarsync.security.UserPrincipal;
 
@@ -20,7 +19,13 @@ public interface SubmissionService {
 
     SubmissionSnapshot getSubmissionSnapshot(Long submissionId, UserPrincipal currentUser);
 
-    FeedbackResponse addFeedback(Long submissionId, FeedbackRequest request, UserPrincipal currentUser);
+    SubmissionResponse submitDraft(Long submissionId, UserPrincipal currentUser);
 
-    SubmissionResponse updateSubmissionStatus(Long submissionId, UpdateSubmissionStatusRequest request, UserPrincipal currentUser);
+    SubmissionResponse reviewSubmission(Long submissionId, UserPrincipal currentUser);
+
+    SubmissionResponse approveSubmission(Long submissionId, FeedbackRequest feedbackRequest, UserPrincipal currentUser);
+
+    SubmissionResponse rejectSubmission(Long submissionId, FeedbackRequest feedbackRequest, UserPrincipal currentUser);
+
+    FeedbackResponse addFeedback(Long submissionId, FeedbackRequest request, UserPrincipal currentUser);
 }
