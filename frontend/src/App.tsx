@@ -9,6 +9,7 @@ import { CreateProjectModal } from './components/CreateProjectModal';
 import { CreateTaskModal } from './components/CreateTaskModal';
 import { AssignStudentModal } from './components/AssignStudentModal';
 import { DeliverablesModal } from './components/DeliverablesModal';
+import { BackgroundScene } from './components/BackgroundScene';
 
 export function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -112,7 +113,7 @@ export function App() {
   if (!currentUser) {
     return (
       <div style={{ minHeight: '100vh' }}>
-        <div className="bg-scene" />
+        <BackgroundScene />
         <Navbar user={null} onLogout={handleLogout} />
         <AuthView onAuthSuccess={(user) => setCurrentUser(user)} />
       </div>
@@ -121,7 +122,7 @@ export function App() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <div className="bg-scene" />
+      <BackgroundScene />
       <Navbar user={currentUser} onLogout={handleLogout} />
 
       <main style={{ flex: 1, maxWidth: 1400, width: '100%', margin: '0 auto', padding: '1.5rem 1.5rem 2.5rem' }}>
