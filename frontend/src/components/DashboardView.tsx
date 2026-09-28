@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Project, User } from '../types';
-import { Plus, Users, FolderKanban, ArrowRight, BookOpen, Loader2 } from 'lucide-react';
+import { Plus, Users, FolderKanban, ArrowRight, BookOpen, Loader2, FlaskConical } from 'lucide-react';
 
 interface DashboardViewProps {
   projects: Project[];
@@ -10,103 +10,157 @@ interface DashboardViewProps {
   onOpenCreateProject: () => void;
 }
 
+const PALETTE = ['#3b82f6', '#6366f1', '#8b5cf6', '#06b6d4', '#10b981'];
+
 export const DashboardView: React.FC<DashboardViewProps> = ({
-  projects,
-  currentUser,
-  loading,
-  onOpenProject,
-  onOpenCreateProject,
+  projects, currentUser, loading, onOpenProject, onOpenCreateProject,
 }) => {
   const isSupervisor = currentUser.role === 'SUPERVISOR';
 
   return (
-    <div className="space-y-6">
-      {/* Header section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/60 border border-slate-800 p-6 rounded-2xl">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+
+      {/* ── Hero Header ── */}
+      <div className="glass animate-fade-up" style={{ padding: '1.75rem 2rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 font-['Outfit']">Research Workspaces</h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '0.5rem' }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+              background: 'linear-gradient(135deg, rgba(59,130,246,0.25), rgba(99,102,241,0.25))',
+              border: '1px solid rgba(59,130,246,0.3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <FlaskConical size={18} style={{ color: '#93c5fd' }} />
+            </div>
+            <h1 className="font-display" style={{ fontSize: '1.35rem', fontWeight: 700, color: '#f0f6ff' }}>
+              Research Workspaces
+            </h1>
+          </div>
+          <p style={{ fontSize: '0.8125rem', color: 'rgba(255,255,255,0.4)', maxWidth: 520, lineHeight: 1.6 }}>
             {isSupervisor
               ? 'Manage collaborative academic projects, assign students, and oversee deliverable lifecycles.'
               : 'Workspaces where you are enrolled to execute research tasks and submit deliverables.'}
           </p>
         </div>
-
         {isSupervisor && (
-          <button
-            onClick={onOpenCreateProject}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/20 transition-all w-fit"
-          >
-            <Plus className="w-4 h-4" />
-            New Research Project
+          <button onClick={onOpenCreateProject} className="btn-primary" style={{ fontSize: '0.8125rem' }}>
+            <Plus size={15} />
+            New Project
           </button>
         )}
       </div>
 
-      {/* Projects Grid */}
+      {/* ── Stats row (supervisor) ── */}
+      {isSupervisor && !loading && projects.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.875rem' }}>
+          {[
+            { label: 'Total Projects', value: projects.length, color: '#60a5fa' },
+            { label: 'Total Students', value: projects.reduce((a, p) => a + p.students.length, 0), color: '#a78bfa' },
+            { label: 'Active Projects', value: projects.length, color: '#34d399' },
+          ].map((s) => (
+            <div key={s.label} className="glass animate-fade-up" style={{ padding: '1rem 1.25rem' }}>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: s.color, fontFamily: 'Outfit,sans-serif', lineHeight: 1 }}>
+                {s.value}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginTop: '0.35rem' }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Projects Grid ── */}
       {loading ? (
-        <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
-          <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
-          <span className="text-xs">Loading research projects...</span>
+        <div style={{ padding: '5rem 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: 'rgba(255,255,255,0.35)' }}>
+          <Loader2 size={24} className="animate-spin" style={{ color: '#60a5fa' }} />
+          <span style={{ fontSize: '0.8125rem' }}>Loading research projects...</span>
         </div>
       ) : projects.length === 0 ? (
-        <div className="p-16 text-center bg-slate-900/40 border border-dashed border-slate-800 rounded-2xl flex flex-col items-center justify-center">
-          <BookOpen className="w-12 h-12 text-slate-600 mb-3" />
-          <h3 className="text-sm font-semibold text-slate-300">No research projects found</h3>
-          <p className="text-xs text-slate-500 max-w-sm mt-1">
+        <div className="glass" style={{
+          padding: '5rem 2rem', textAlign: 'center',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          border: '1px dashed rgba(255,255,255,0.1)',
+        }}>
+          <BookOpen size={44} style={{ color: 'rgba(255,255,255,0.15)', marginBottom: '1rem' }} />
+          <div className="font-display" style={{ fontSize: '1rem', fontWeight: 600, color: 'rgba(255,255,255,0.5)', marginBottom: '0.5rem' }}>
+            No research projects found
+          </div>
+          <p style={{ fontSize: '0.8125rem', color: 'rgba(255,255,255,0.3)', maxWidth: 380 }}>
             {isSupervisor
-              ? 'Click "+ New Research Project" above to create your first academic project workspace.'
-              : 'You have not been assigned to any research projects yet. Contact your faculty supervisor.'}
+              ? 'Click "New Project" above to create your first academic research project.'
+              : 'You have not been assigned to any projects yet. Contact your faculty supervisor.'}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {projects.map((project) => (
-            <div
-              key={project.id}
-              className="bg-slate-900/80 border border-slate-800 hover:border-slate-700/80 rounded-2xl p-5 shadow-lg flex flex-col justify-between transition-all hover:translate-y-[-2px] group"
-            >
-              <div>
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-                  <div className="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center">
-                    <FolderKanban className="w-4 h-4" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
+          {projects.map((project, i) => {
+            const accent = PALETTE[i % PALETTE.length];
+            return (
+              <div
+                key={project.id}
+                className="glass glass-hover animate-fade-up"
+                style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', animationDelay: `${i * 0.04}s` }}
+              >
+                {/* Card Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
+                  <div style={{
+                    width: 34, height: 34, borderRadius: 9,
+                    background: `${accent}22`, border: `1px solid ${accent}44`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <FolderKanban size={16} style={{ color: accent }} />
                   </div>
-                  <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-                    ID: {project.id}
+                  <span className="font-mono badge badge-draft" style={{ fontSize: '0.65rem' }}>
+                    #{project.id}
                   </span>
                 </div>
 
-                <h3 className="text-base font-bold text-slate-100 mt-3 font-['Outfit'] group-hover:text-indigo-300 transition-colors">
+                {/* Title */}
+                <h3 className="font-display" style={{ fontSize: '0.975rem', fontWeight: 700, color: '#f0f6ff', marginBottom: '0.5rem', lineHeight: 1.3 }}>
                   {project.title}
                 </h3>
 
-                <p className="text-xs text-slate-400 mt-2 line-clamp-3 leading-relaxed">
+                {/* Description */}
+                <p style={{
+                  fontSize: '0.8rem', color: 'rgba(255,255,255,0.38)',
+                  lineHeight: 1.6, flex: 1,
+                  display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                }}>
                   {project.description || 'No project description provided.'}
                 </p>
-              </div>
 
-              <div className="mt-5 pt-4 border-t border-slate-800/80">
-                <div className="flex items-center justify-between text-xs text-slate-400 mb-3">
-                  <span>
-                    Supervisor: <strong className="text-slate-300">{project.supervisor.name}</strong>
+                {/* Accent bar */}
+                <div style={{ height: 2, background: `linear-gradient(90deg, ${accent}55, transparent)`, borderRadius: 999, margin: '0.9rem 0 0.75rem' }} />
+
+                {/* Meta */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.38)' }}>
+                    Supervisor: <strong style={{ color: 'rgba(255,255,255,0.6)' }}>{project.supervisor.name}</strong>
                   </span>
-                  <span className="flex items-center gap-1 font-medium text-slate-300">
-                    <Users className="w-3.5 h-3.5 text-slate-400" />
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>
+                    <Users size={12} />
                     {project.students.length} {project.students.length === 1 ? 'student' : 'students'}
                   </span>
                 </div>
 
+                {/* Open button */}
                 <button
                   type="button"
                   onClick={() => onOpenProject(project.id)}
-                  className="w-full py-2 px-3 rounded-xl bg-indigo-600/10 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 hover:border-indigo-600 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm"
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    padding: '0.55rem', borderRadius: 10, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                    background: `${accent}18`, border: `1px solid ${accent}35`,
+                    color: accent, transition: 'all 0.2s ease',
+                  }}
+                  onMouseOver={(e) => { e.currentTarget.style.background = `${accent}30`; e.currentTarget.style.borderColor = `${accent}60`; }}
+                  onMouseOut={(e) => { e.currentTarget.style.background = `${accent}18`; e.currentTarget.style.borderColor = `${accent}35`; }}
                 >
-                  <span>Open Kanban Board</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  Open Kanban Board
+                  <ArrowRight size={13} />
                 </button>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

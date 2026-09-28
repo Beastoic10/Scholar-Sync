@@ -9,42 +9,50 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
   return (
-    <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur-md border-b border-slate-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <header className="sticky top-0 z-40" style={{
+      background: 'rgba(10, 15, 30, 0.7)',
+      backdropFilter: 'blur(24px) saturate(180%)',
+      WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+      borderBottom: '1px solid rgba(255,255,255,0.08)',
+    }}>
+      <div className="max-w-[1400px] mx-auto px-5 sm:px-8 h-[60px] flex items-center justify-between">
         {/* Brand */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-            <GraduationCap className="w-5 h-5" />
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(99,102,241,0.3))',
+            border: '1px solid rgba(59,130,246,0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 0 20px rgba(59,130,246,0.25)',
+          }}>
+            <GraduationCap size={18} style={{ color: '#93c5fd' }} />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-lg tracking-tight font-['Outfit'] text-slate-100">
-                Scholar<span className="text-indigo-400">Sync</span>
-              </span>
-              <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800/60">
-                Academic SaaS
-              </span>
+            <div className="font-display font-bold text-[1.05rem] tracking-tight leading-none" style={{ color: '#f0f6ff' }}>
+              Scholar<span style={{ color: '#60a5fa' }}>Sync</span>
             </div>
-            <p className="text-xs text-slate-400">Research Kanban & Deliverables Platform</p>
+            <div className="text-[10px] font-medium tracking-[0.08em] uppercase" style={{ color: 'rgba(255,255,255,0.35)' }}>
+              Research Platform
+            </div>
           </div>
         </div>
 
         {/* User actions */}
         {user ? (
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 bg-slate-800/60 border border-slate-700/60 px-3 py-1.5 rounded-xl">
-              <UserCircle className="w-5 h-5 text-slate-400" />
-              <div className="text-left">
-                <div className="text-xs font-medium text-slate-200">{user.name}</div>
-                <div className="text-[10px] text-slate-400 truncate max-w-[150px]">{user.email}</div>
+          <div className="flex items-center gap-3">
+            {/* User pill */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 12, padding: '5px 10px',
+            }}>
+              <UserCircle size={16} style={{ color: 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
+              <div>
+                <div className="text-xs font-semibold leading-tight" style={{ color: 'rgba(255,255,255,0.85)' }}>{user.name}</div>
+                <div className="text-[10px] leading-none mt-0.5 truncate max-w-[130px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{user.email}</div>
               </div>
-              <span
-                className={`text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full border ${
-                  user.role === 'SUPERVISOR'
-                    ? 'bg-purple-950/80 text-purple-300 border-purple-800/50'
-                    : 'bg-emerald-950/80 text-emerald-300 border-emerald-800/50'
-                }`}
-              >
+              <span className={`badge ${user.role === 'SUPERVISOR' ? 'badge-supervisor' : 'badge-student'} ml-1`}>
                 {user.role}
               </span>
             </div>
@@ -53,17 +61,15 @@ export const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
               href="/swagger-ui.html"
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden sm:inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-300 transition-colors px-3 py-1.5 rounded-lg border border-slate-700/60 hover:border-indigo-500/40"
+              className="btn-ghost hidden sm:inline-flex text-xs"
+              style={{ padding: '5px 10px' }}
             >
-              <ExternalLink className="w-3.5 h-3.5" />
-              OpenAPI
+              <ExternalLink size={13} />
+              API
             </a>
 
-            <button
-              onClick={onLogout}
-              className="inline-flex items-center gap-1.5 text-xs text-slate-300 hover:text-red-300 hover:bg-red-950/40 border border-slate-700/80 hover:border-red-800/60 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <LogOut className="w-3.5 h-3.5" />
+            <button onClick={onLogout} className="btn-ghost text-xs" style={{ padding: '5px 10px', color: 'rgba(255,100,100,0.8)' }}>
+              <LogOut size={13} />
               Sign Out
             </button>
           </div>

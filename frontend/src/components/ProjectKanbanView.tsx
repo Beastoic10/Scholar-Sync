@@ -2,15 +2,8 @@ import React, { useState } from 'react';
 import type { Project, Task, TaskStateEnum, User } from '../types';
 import { taskApi } from '../api';
 import {
-  ArrowLeft,
-  UserPlus,
-  Plus,
-  Trash2,
-  Package,
-  ArrowRight,
-  RotateCcw,
-  CheckCircle2,
-  Clock,
+  ArrowLeft, UserPlus, Plus, Trash2, Package,
+  ArrowRight, RotateCcw, CheckCircle2, Clock,
 } from 'lucide-react';
 
 interface ProjectKanbanViewProps {
@@ -24,26 +17,26 @@ interface ProjectKanbanViewProps {
   onOpenDeliverables: (task: Task) => void;
 }
 
-const KANBAN_COLUMNS: { state: TaskStateEnum; title: string; color: string; border: string; bg: string }[] = [
-  { state: 'PROPOSED', title: 'Proposed', color: 'text-sky-400', border: 'border-sky-500/40', bg: 'bg-sky-500/10' },
-  { state: 'LITERATURE_REVIEW', title: 'Literature Review', color: 'text-purple-400', border: 'border-purple-500/40', bg: 'bg-purple-500/10' },
-  { state: 'EXPERIMENTATION', title: 'Experimentation', color: 'text-amber-400', border: 'border-amber-500/40', bg: 'bg-amber-500/10' },
-  { state: 'UNDER_REVIEW', title: 'Under Review', color: 'text-yellow-400', border: 'border-yellow-500/40', bg: 'bg-yellow-500/10' },
-  { state: 'APPROVED', title: 'Approved', color: 'text-emerald-400', border: 'border-emerald-500/40', bg: 'bg-emerald-500/10' },
+type ColDef = {
+  state: TaskStateEnum;
+  title: string;
+  accent: string;
+  glow: string;
+};
+
+const COLUMNS: ColDef[] = [
+  { state: 'PROPOSED',         title: 'Proposed',         accent: '#38bdf8', glow: 'rgba(56,189,248,0.18)' },
+  { state: 'LITERATURE_REVIEW',title: 'Lit. Review',      accent: '#a78bfa', glow: 'rgba(167,139,250,0.18)' },
+  { state: 'EXPERIMENTATION',  title: 'Experimentation',  accent: '#fbbf24', glow: 'rgba(251,191,36,0.18)' },
+  { state: 'UNDER_REVIEW',     title: 'Under Review',     accent: '#fb923c', glow: 'rgba(251,146,60,0.18)' },
+  { state: 'APPROVED',         title: 'Approved',         accent: '#34d399', glow: 'rgba(52,211,153,0.18)' },
 ];
 
 export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
-  project,
-  tasks,
-  currentUser,
-  onBack,
-  onRefreshTasks,
-  onOpenAssignStudent,
-  onOpenCreateTask,
-  onOpenDeliverables,
+  project, tasks, currentUser, onBack, onRefreshTasks,
+  onOpenAssignStudent, onOpenCreateTask, onOpenDeliverables,
 }) => {
   const [transitioningId, setTransitioningId] = useState<number | null>(null);
-
   const isSupervisor = currentUser.role === 'SUPERVISOR';
 
   const handleTransition = async (taskId: number, targetState: TaskStateEnum) => {
@@ -59,7 +52,7 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
   };
 
   const handleDeleteTask = async (taskId: number) => {
-    if (!confirm('Are you sure you want to delete this research task?')) return;
+    if (!confirm('Delete this research task?')) return;
     try {
       await taskApi.deleteTask(taskId);
       onRefreshTasks();
@@ -69,244 +62,109 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner & Project Info */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl backdrop-blur-md">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
-          <button
-            onClick={onBack}
-            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-slate-100 transition-colors w-fit"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Projects
-          </button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
-          <div className="flex items-center gap-3">
+      {/* ── Project Header ── */}
+      <div className="glass animate-fade-up" style={{ padding: '1.25rem 1.5rem' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '1rem' }}>
+          <button onClick={onBack} className="btn-ghost" style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}>
+            <ArrowLeft size={13} />
+            All Projects
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {isSupervisor && (
-              <button
-                onClick={onOpenAssignStudent}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-indigo-300 bg-indigo-950/70 hover:bg-indigo-900/80 border border-indigo-700/60 shadow-sm transition-colors"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
+              <button onClick={onOpenAssignStudent} className="btn-ghost" style={{ fontSize: '0.8rem', padding: '0.4rem 0.875rem' }}>
+                <UserPlus size={13} />
                 Assign Student
               </button>
             )}
-            <button
-              onClick={onOpenCreateTask}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/20 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
+            <button onClick={onOpenCreateTask} className="btn-primary" style={{ fontSize: '0.8rem', padding: '0.4rem 0.875rem' }}>
+              <Plus size={14} />
               Create Task
             </button>
           </div>
         </div>
 
-        <div className="mt-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-100 font-['Outfit']">
+        <hr className="glow-divider" style={{ marginBottom: '0.9rem' }} />
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '0.5rem 1rem' }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <h1 className="font-display" style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f0f6ff', marginBottom: '0.35rem' }}>
               {project.title}
             </h1>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-medium">
-              Supervisor: {project.supervisor.name}
-            </span>
+            {project.description && (
+              <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.38)', lineHeight: 1.5, maxWidth: 560 }}>
+                {project.description}
+              </p>
+            )}
           </div>
-
-          {project.description && (
-            <p className="text-xs sm:text-sm text-slate-400 mt-2 max-w-3xl leading-relaxed">
-              {project.description}
-            </p>
-          )}
-
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-            <span className="font-semibold text-slate-300">Enrolled Students ({project.students.length}):</span>
-            {project.students.length > 0 ? (
-              project.students.map((student) => (
-                <span
-                  key={student.id}
-                  className="px-2.5 py-1 rounded-lg bg-slate-950/80 text-slate-300 border border-slate-800 text-[11px] font-medium flex items-center gap-1.5"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                  {student.name}
-                  <span className="text-slate-500 text-[10px]">#{student.id}</span>
-                </span>
-              ))
-            ) : (
-              <span className="text-slate-500 italic">No students assigned yet.</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            <span className="badge badge-supervisor">Supervisor: {project.supervisor.name}</span>
+            {project.students.map((s) => (
+              <span key={s.id} className="badge badge-student">
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
+                {s.name}
+              </span>
+            ))}
+            {project.students.length === 0 && (
+              <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>No students assigned</span>
             )}
           </div>
         </div>
       </div>
 
-      {/* 5-Column Kanban Board */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        {KANBAN_COLUMNS.map((col) => {
+      {/* ── Kanban Board ── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(5, 1fr)',
+        gap: '0.875rem',
+        minHeight: 0,
+      }}>
+        {COLUMNS.map((col) => {
           const colTasks = tasks.filter((t) => t.currentState === col.state);
-
           return (
-            <div
-              key={col.state}
-              className="bg-slate-900/60 border border-slate-800/90 rounded-2xl p-3.5 flex flex-col min-h-[500px]"
-            >
-              {/* Column Header */}
-              <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
-                <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${col.bg} border ${col.border}`}></span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+            <div key={col.state} className="kanban-col animate-fade-up">
+              {/* Column header */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                paddingBottom: '0.75rem', marginBottom: '0.75rem',
+                borderBottom: `1px solid ${col.accent}30`,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: col.accent, boxShadow: `0 0 8px ${col.accent}` }} />
+                  <span style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: col.accent }}>
                     {col.title}
                   </span>
                 </div>
-                <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                <span style={{
+                  fontSize: '0.7rem', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+                  padding: '0.15rem 0.5rem', borderRadius: 999,
+                  background: `${col.accent}18`, color: col.accent, border: `1px solid ${col.accent}30`,
+                }}>
                   {colTasks.length}
                 </span>
               </div>
 
-              {/* Column Cards */}
-              <div className="flex-1 space-y-3 overflow-y-auto">
+              {/* Task cards */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.625rem', overflowY: 'auto' }}>
                 {colTasks.map((task) => (
-                  <div
+                  <TaskCard
                     key={task.id}
-                    className="p-3.5 bg-slate-950/70 hover:bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl shadow-sm transition-all group"
-                  >
-                    <div className="text-xs font-bold text-slate-100 leading-snug">
-                      {task.title}
-                    </div>
-
-                    {task.description && (
-                      <p className="text-[11px] text-slate-400 mt-1.5 line-clamp-2 leading-relaxed">
-                        {task.description}
-                      </p>
-                    )}
-
-                    <div className="mt-3 flex items-center justify-between text-[11px]">
-                      {task.assignedStudent ? (
-                        <span className="inline-flex items-center gap-1 text-slate-300 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-md">
-                          👤 {task.assignedStudent.name}
-                        </span>
-                      ) : (
-                        <span className="text-slate-500 italic">Unassigned</span>
-                      )}
-
-                      {isSupervisor && (
-                        <button
-                          onClick={() => handleDeleteTask(task.id)}
-                          className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 p-1 rounded transition-opacity"
-                          title="Delete task (Supervisor only)"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Deliverables Action */}
-                    <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between">
-                      <button
-                        type="button"
-                        onClick={() => onOpenDeliverables(task)}
-                        className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 transition-colors"
-                      >
-                        <Package className="w-3.5 h-3.5" />
-                        Deliverables
-                      </button>
-
-                      {/* State Transition Actions based on State Pattern */}
-                      <div className="flex items-center gap-1">
-                        {task.currentState === 'PROPOSED' && (
-                          <button
-                            disabled={transitioningId === task.id}
-                            onClick={() => handleTransition(task.id, 'LITERATURE_REVIEW')}
-                            className="text-[11px] font-semibold text-sky-400 hover:text-sky-300 flex items-center gap-0.5 px-2 py-0.5 rounded bg-sky-950/60 border border-sky-800/50"
-                            title="Start Literature Review"
-                          >
-                            <span>Lit. Review</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
-                        )}
-
-                        {task.currentState === 'LITERATURE_REVIEW' && (
-                          <>
-                            <button
-                              disabled={transitioningId === task.id}
-                              onClick={() => handleTransition(task.id, 'PROPOSED')}
-                              className="text-[11px] font-medium text-slate-400 hover:text-slate-300 p-1"
-                              title="Revise Proposal"
-                            >
-                              <RotateCcw className="w-3 h-3" />
-                            </button>
-                            <button
-                              disabled={transitioningId === task.id}
-                              onClick={() => handleTransition(task.id, 'EXPERIMENTATION')}
-                              className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-0.5 px-2 py-0.5 rounded bg-amber-950/60 border border-amber-800/50"
-                            >
-                              <span>Experiments</span>
-                              <ArrowRight className="w-3 h-3" />
-                            </button>
-                          </>
-                        )}
-
-                        {task.currentState === 'EXPERIMENTATION' && (
-                          <>
-                            <button
-                              disabled={transitioningId === task.id}
-                              onClick={() => handleTransition(task.id, 'LITERATURE_REVIEW')}
-                              className="text-[11px] font-medium text-slate-400 hover:text-slate-300 p-1"
-                              title="Revisit Literature"
-                            >
-                              <RotateCcw className="w-3 h-3" />
-                            </button>
-                            <button
-                              disabled={transitioningId === task.id}
-                              onClick={() => handleTransition(task.id, 'UNDER_REVIEW')}
-                              className="text-[11px] font-semibold text-yellow-400 hover:text-yellow-300 flex items-center gap-0.5 px-2 py-0.5 rounded bg-yellow-950/60 border border-yellow-800/50"
-                            >
-                              <span>For Review</span>
-                              <ArrowRight className="w-3 h-3" />
-                            </button>
-                          </>
-                        )}
-
-                        {task.currentState === 'UNDER_REVIEW' && (
-                          <>
-                            {isSupervisor ? (
-                              <div className="flex items-center gap-1">
-                                <button
-                                  disabled={transitioningId === task.id}
-                                  onClick={() => handleTransition(task.id, 'EXPERIMENTATION')}
-                                  className="text-[10px] text-amber-400 p-1 rounded hover:bg-slate-800"
-                                  title="Request Revisions"
-                                >
-                                  <RotateCcw className="w-3 h-3" />
-                                </button>
-                                <button
-                                  disabled={transitioningId === task.id}
-                                  onClick={() => handleTransition(task.id, 'APPROVED')}
-                                  className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/50 flex items-center gap-0.5"
-                                >
-                                  <CheckCircle2 className="w-3 h-3" />
-                                  <span>Approve</span>
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-[10px] text-yellow-400 font-medium flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                Pending
-                              </span>
-                            )}
-                          </>
-                        )}
-
-                        {task.currentState === 'APPROVED' && (
-                          <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" />
-                            Approved
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                    task={task}
+                    col={col}
+                    isSupervisor={isSupervisor}
+                    transitioningId={transitioningId}
+                    onTransition={handleTransition}
+                    onDelete={handleDeleteTask}
+                    onOpenDeliverables={onOpenDeliverables}
+                  />
                 ))}
-
                 {colTasks.length === 0 && (
-                  <div className="h-28 border border-dashed border-slate-800/80 rounded-xl flex items-center justify-center text-[11px] text-slate-600">
+                  <div style={{
+                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: `1px dashed ${col.accent}20`, borderRadius: 12,
+                    minHeight: 80, fontSize: '0.7rem', color: 'rgba(255,255,255,0.2)',
+                  }}>
                     No tasks
                   </div>
                 )}
@@ -318,3 +176,166 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
     </div>
   );
 };
+
+/* ─── Task Card ────────────────────────────────────────────────── */
+function TaskCard({
+  task, col, isSupervisor, transitioningId,
+  onTransition, onDelete, onOpenDeliverables,
+}: {
+  task: Task;
+  col: ColDef;
+  isSupervisor: boolean;
+  transitioningId: number | null;
+  onTransition: (id: number, state: TaskStateEnum) => void;
+  onDelete: (id: number) => void;
+  onOpenDeliverables: (task: Task) => void;
+}) {
+  const busy = transitioningId === task.id;
+
+  return (
+    <div className="kanban-card" style={{ position: 'relative', borderLeft: `2px solid ${col.accent}50` }}>
+      {/* Title */}
+      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f0f6ff', lineHeight: 1.35, marginBottom: '0.35rem' }}>
+        {task.title}
+      </div>
+
+      {/* Description */}
+      {task.description && (
+        <p style={{
+          fontSize: '0.72rem', color: 'rgba(255,255,255,0.35)', lineHeight: 1.5,
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          marginBottom: '0.5rem',
+        }}>
+          {task.description}
+        </p>
+      )}
+
+      {/* Assignee */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+        {task.assignedStudent ? (
+          <span className="badge badge-student" style={{ fontSize: '0.65rem' }}>
+            {task.assignedStudent.name}
+          </span>
+        ) : (
+          <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' }}>Unassigned</span>
+        )}
+        {isSupervisor && (
+          <button
+            onClick={() => onDelete(task.id)}
+            title="Delete task"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'rgba(255,255,255,0.2)', borderRadius: 6, transition: 'color 0.15s ease' }}
+            onMouseOver={(e) => e.currentTarget.style.color = '#f87171'}
+            onMouseOut={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.2)'}
+          >
+            <Trash2 size={12} />
+          </button>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', marginBottom: '0.6rem' }} />
+
+      {/* Actions row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+        {/* Deliverables */}
+        <button
+          type="button"
+          onClick={() => onOpenDeliverables(task)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontSize: '0.7rem', fontWeight: 600, color: '#93c5fd',
+            background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px',
+            transition: 'color 0.15s ease',
+          }}
+          onMouseOver={(e) => e.currentTarget.style.color = '#60a5fa'}
+          onMouseOut={(e) => e.currentTarget.style.color = '#93c5fd'}
+        >
+          <Package size={11} />
+          Deliverables
+        </button>
+
+        {/* Transitions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          {task.currentState === 'PROPOSED' && (
+            <TransBtn disabled={busy} color="#38bdf8" onClick={() => onTransition(task.id, 'LITERATURE_REVIEW')}>
+              Lit. Review <ArrowRight size={10} />
+            </TransBtn>
+          )}
+
+          {task.currentState === 'LITERATURE_REVIEW' && (<>
+            <BackBtn disabled={busy} onClick={() => onTransition(task.id, 'PROPOSED')} />
+            <TransBtn disabled={busy} color="#fbbf24" onClick={() => onTransition(task.id, 'EXPERIMENTATION')}>
+              Experiment <ArrowRight size={10} />
+            </TransBtn>
+          </>)}
+
+          {task.currentState === 'EXPERIMENTATION' && (<>
+            <BackBtn disabled={busy} onClick={() => onTransition(task.id, 'LITERATURE_REVIEW')} />
+            <TransBtn disabled={busy} color="#fb923c" onClick={() => onTransition(task.id, 'UNDER_REVIEW')}>
+              Review <ArrowRight size={10} />
+            </TransBtn>
+          </>)}
+
+          {task.currentState === 'UNDER_REVIEW' && (
+            isSupervisor ? (<>
+              <BackBtn disabled={busy} onClick={() => onTransition(task.id, 'EXPERIMENTATION')} />
+              <TransBtn disabled={busy} color="#34d399" onClick={() => onTransition(task.id, 'APPROVED')}>
+                <CheckCircle2 size={10} /> Approve
+              </TransBtn>
+            </>) : (
+              <span style={{ fontSize: '0.65rem', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: 3 }}>
+                <Clock size={10} /> Awaiting
+              </span>
+            )
+          )}
+
+          {task.currentState === 'APPROVED' && (
+            <span style={{ fontSize: '0.65rem', color: '#34d399', display: 'flex', alignItems: 'center', gap: 3, fontWeight: 700 }}>
+              <CheckCircle2 size={10} /> Done
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TransBtn({ children, color, disabled, onClick }: { children: React.ReactNode; color: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3,
+        fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer',
+        background: `${color}18`, border: `1px solid ${color}35`,
+        color, borderRadius: 7, padding: '0.2rem 0.4rem',
+        transition: 'all 0.15s ease', opacity: disabled ? 0.5 : 1,
+      }}
+      onMouseOver={(e) => { if (!disabled) e.currentTarget.style.background = `${color}30`; }}
+      onMouseOut={(e) => { e.currentTarget.style.background = `${color}18`; }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function BackBtn({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      disabled={disabled}
+      onClick={onClick}
+      title="Go back"
+      style={{
+        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: 7, padding: '0.2rem 0.35rem', cursor: 'pointer',
+        color: 'rgba(255,255,255,0.35)', transition: 'all 0.15s ease', opacity: disabled ? 0.5 : 1,
+        display: 'inline-flex', alignItems: 'center',
+      }}
+      onMouseOver={(e) => { if (!disabled) { e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; } }}
+      onMouseOut={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+    >
+      <RotateCcw size={10} />
+    </button>
+  );
+}

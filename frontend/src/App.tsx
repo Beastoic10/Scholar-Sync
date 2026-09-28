@@ -99,15 +99,20 @@ export function App() {
 
   if (initializing) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-sm">
-        Initializing ScholarSync...
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8125rem', color: 'rgba(255,255,255,0.35)' }}>
+        <div className="bg-scene" />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 32, height: 32, border: '2px solid rgba(59,130,246,0.4)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+          Initializing ScholarSync…
+        </div>
       </div>
     );
   }
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-slate-950">
+      <div style={{ minHeight: '100vh' }}>
+        <div className="bg-scene" />
         <Navbar user={null} onLogout={handleLogout} />
         <AuthView onAuthSuccess={(user) => setCurrentUser(user)} />
       </div>
@@ -115,10 +120,11 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="bg-scene" />
       <Navbar user={currentUser} onLogout={handleLogout} />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main style={{ flex: 1, maxWidth: 1400, width: '100%', margin: '0 auto', padding: '1.5rem 1.5rem 2.5rem' }}>
         {view === 'dashboard' ? (
           <DashboardView
             projects={projects}

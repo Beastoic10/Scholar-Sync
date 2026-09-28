@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { projectApi } from '../api';
 import type { Project, User } from '../types';
-import { X, UserPlus, Search, Check, Loader2, UserCheck, AlertCircle } from 'lucide-react';
+import { UserPlus, Search, Check, Loader2, UserCheck } from 'lucide-react';
+import { ModalHeader, ErrorBar } from './CreateProjectModal';
 
 interface AssignStudentModalProps {
   isOpen: boolean;
@@ -11,10 +12,7 @@ interface AssignStudentModalProps {
 }
 
 export const AssignStudentModal: React.FC<AssignStudentModalProps> = ({
-  isOpen,
-  onClose,
-  project,
-  onStudentAssigned,
+  isOpen, onClose, project, onStudentAssigned,
 }) => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<User[]>([]);
@@ -22,222 +20,157 @@ export const AssignStudentModal: React.FC<AssignStudentModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const searchTimeoutRef = useRef<number | null>(null);
+  const timerRef = useRef<number | null>(null);
 
-  // Fetch eligible students whenever modal opens or query changes
   useEffect(() => {
     if (!isOpen) {
-      setQuery('');
-      setSuggestions([]);
-      setSelectedStudent(null);
-      setError(null);
+      setQuery(''); setSuggestions([]); setSelectedStudent(null); setError(null);
       return;
     }
-
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    setLoading(true);
-    setError(null);
-
-    // Debounce search by 200ms
-    searchTimeoutRef.current = window.setTimeout(async () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setLoading(true); setError(null);
+    timerRef.current = window.setTimeout(async () => {
       try {
         const results = await projectApi.getEligibleStudents(project.id, query);
         setSuggestions(results || []);
       } catch (err: any) {
         setError(err.message || 'Failed to search eligible students');
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     }, 200);
-
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [isOpen, query, project.id]);
 
   if (!isOpen) return null;
 
   const handleAssign = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedStudent) {
-      setError('Please select a student from the search suggestions');
-      return;
-    }
-
-    setAssigning(true);
-    setError(null);
-
+    if (!selectedStudent) { setError('Please select a student from the suggestions'); return; }
+    setAssigning(true); setError(null);
     try {
       const updated = await projectApi.addStudentToProject(project.id, selectedStudent.id);
       onStudentAssigned(updated);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to assign student to project');
-    } finally {
-      setAssigning(false);
-    }
+      setError(err.message || 'Failed to assign student');
+    } finally { setAssigning(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 sm:p-7">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center">
-              <UserPlus className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-100 font-['Outfit']">Assign Student Researcher</h3>
-              <p className="text-xs text-slate-400">Search and enroll students in &ldquo;{project.title}&rdquo;</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-200 p-1 rounded-lg hover:bg-slate-800"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <div className="modal-backdrop">
+      <div className="glass-strong animate-fade-up" style={{ width: '100%', maxWidth: 480 }}>
+        <ModalHeader
+          icon={<UserPlus size={17} style={{ color: '#93c5fd' }} />}
+          title="Assign Student Researcher"
+          subtitle={`Enroll into "${project.title}"`}
+          onClose={onClose}
+        />
 
-        {error && (
-          <div className="mt-4 p-3 bg-red-950/50 border border-red-800/60 rounded-xl text-xs text-red-300 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-            <span>{error}</span>
-          </div>
-        )}
+        {error && <ErrorBar text={error} />}
 
-        <form onSubmit={handleAssign} className="mt-5 space-y-4">
-          {/* Search Input with Live Suggestions */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-              Search Student by Name or Email
-            </label>
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setSelectedStudent(null);
-                }}
-                placeholder="Type student name (e.g. Ada Lovelace)..."
-                className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-10 pr-10 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                autoFocus
-              />
-              {loading && (
-                <Loader2 className="w-4 h-4 text-indigo-400 animate-spin absolute right-3.5 top-3" />
-              )}
-            </div>
+        <form onSubmit={handleAssign} style={{ padding: '0 1.5rem 1.5rem', marginTop: '0.875rem', display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+          {/* Search */}
+          <div style={{ position: 'relative' }}>
+            <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)', pointerEvents: 'none' }} />
+            <input
+              type="text" value={query} autoFocus
+              onChange={(e) => { setQuery(e.target.value); setSelectedStudent(null); }}
+              placeholder="Search student by name or email…"
+              className="glass-input" style={{ paddingLeft: '2rem', paddingRight: '2rem' }}
+            />
+            {loading && <Loader2 size={13} className="animate-spin" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', color: '#93c5fd' }} />}
           </div>
 
-          {/* Selected Student Confirmation Pill */}
+          {/* Selected pill */}
           {selectedStudent && (
-            <div className="p-3 bg-indigo-950/40 border border-indigo-500/40 rounded-xl flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300 text-xs font-bold">
+            <div style={{
+              padding: '0.625rem 0.875rem', borderRadius: 12,
+              background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                  background: 'rgba(59,130,246,0.2)', border: '1px solid rgba(59,130,246,0.35)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.75rem', fontWeight: 700, color: '#93c5fd',
+                }}>
                   {selectedStudent.name.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <div className="text-xs font-semibold text-slate-100 flex items-center gap-1.5">
+                  <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f0f6ff', display: 'flex', alignItems: 'center', gap: 6 }}>
                     {selectedStudent.name}
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-900/60 text-indigo-300 font-mono">
-                      ID: {selectedStudent.id}
+                    <span className="font-mono" style={{ fontSize: '0.65rem', padding: '0.1rem 0.45rem', background: 'rgba(59,130,246,0.2)', borderRadius: 6, color: '#93c5fd' }}>
+                      #{selectedStudent.id}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-400">{selectedStudent.email}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)' }}>{selectedStudent.email}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-1 text-emerald-400 text-xs font-semibold">
-                <UserCheck className="w-4 h-4" />
-                Selected
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', color: '#34d399', fontWeight: 600 }}>
+                <UserCheck size={13} /> Selected
               </div>
             </div>
           )}
 
-          {/* Suggestions Dropdown List */}
-          <div className="max-h-52 overflow-y-auto border border-slate-800 rounded-xl divide-y divide-slate-800/60 bg-slate-950/60">
-            {suggestions.length > 0 ? (
-              suggestions.map((student) => {
-                const isSelected = selectedStudent?.id === student.id;
-                return (
-                  <button
-                    key={student.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedStudent(student);
-                      setError(null);
-                    }}
-                    className={`w-full text-left p-3 flex items-center justify-between transition-colors ${
-                      isSelected
-                        ? 'bg-indigo-950/50 hover:bg-indigo-900/50'
-                        : 'hover:bg-slate-800/60'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-xs font-semibold">
-                        {student.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="text-xs font-medium text-slate-100 flex items-center gap-2">
-                          <span>{student.name}</span>
-                          <span className="text-[10px] text-slate-500 font-mono">#{student.id}</span>
-                        </div>
-                        <div className="text-[11px] text-slate-400">{student.email}</div>
-                      </div>
+          {/* Suggestions list */}
+          <div style={{
+            maxHeight: 220, overflowY: 'auto',
+            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 12,
+          }}>
+            {suggestions.length > 0 ? suggestions.map((student) => {
+              const isSel = selectedStudent?.id === student.id;
+              return (
+                <button
+                  key={student.id} type="button"
+                  onClick={() => { setSelectedStudent(student); setError(null); }}
+                  style={{
+                    width: '100%', textAlign: 'left', padding: '0.625rem 0.875rem',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    background: isSel ? 'rgba(59,130,246,0.12)' : 'transparent',
+                    border: 'none', borderBottom: '1px solid rgba(255,255,255,0.05)',
+                    cursor: 'pointer', transition: 'background 0.15s ease',
+                  }}
+                  onMouseOver={(e) => { if (!isSel) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                  onMouseOut={(e) => { if (!isSel) e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                      background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '0.7rem', fontWeight: 700, color: 'rgba(255,255,255,0.6)',
+                    }}>
+                      {student.name.charAt(0).toUpperCase()}
                     </div>
-                    {isSelected ? (
-                      <span className="w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs">
-                        <Check className="w-3 h-3" />
-                      </span>
-                    ) : (
-                      <span className="text-[11px] font-semibold text-slate-500 hover:text-indigo-400">
-                        Select
-                      </span>
-                    )}
-                  </button>
-                );
-              })
-            ) : (
-              <div className="p-4 text-center text-xs text-slate-500">
-                {loading
-                  ? 'Searching eligible students...'
-                  : query
-                  ? `No eligible students found matching "${query}"`
-                  : 'No eligible students available to enroll.'}
+                    <div>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 500, color: '#f0f6ff', display: 'flex', alignItems: 'center', gap: 5 }}>
+                        {student.name}
+                        <span className="font-mono" style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)' }}>#{student.id}</span>
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)' }}>{student.email}</div>
+                    </div>
+                  </div>
+                  {isSel ? (
+                    <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Check size={10} style={{ color: '#fff' }} />
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.25)' }}>Select</span>
+                  )}
+                </button>
+              );
+            }) : (
+              <div style={{ padding: '2rem', textAlign: 'center', fontSize: '0.78rem', color: 'rgba(255,255,255,0.3)' }}>
+                {loading ? 'Searching…' : query ? `No eligible students matching "${query}"` : 'No eligible students available.'}
               </div>
             )}
           </div>
 
-          <div className="flex justify-end gap-3 pt-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 rounded-xl border border-slate-700/80"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={assigning || !selectedStudent}
-              className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-lg shadow-indigo-600/20 disabled:opacity-50 flex items-center gap-1.5"
-            >
-              {assigning ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Assigning...
-                </>
-              ) : (
-                <>
-                  <UserPlus className="w-3.5 h-3.5" />
-                  Assign to Project
-                </>
-              )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 4 }}>
+            <button type="button" onClick={onClose} className="btn-ghost" style={{ fontSize: '0.8rem' }}>Cancel</button>
+            <button type="submit" disabled={assigning || !selectedStudent} className="btn-primary" style={{ fontSize: '0.8rem' }}>
+              {assigning ? <><Loader2 size={13} className="animate-spin" /> Assigning…</> : <><UserPlus size={13} /> Assign to Project</>}
             </button>
           </div>
         </form>
