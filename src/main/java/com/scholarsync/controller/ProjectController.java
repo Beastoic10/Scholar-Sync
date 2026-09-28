@@ -85,4 +85,21 @@ public class ProjectController {
         ProjectResponse project = projectService.addStudentToProject(id, studentId, currentUser);
         return ResponseEntity.ok(project);
     }
+
+    @GetMapping("/{id}/eligible-students")
+    @PreAuthorize("hasRole('SUPERVISOR')")
+    @Operation(summary = "Search eligible students for project", description = "Finds students who are not yet enrolled in this project, optionally filtered by name query.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "List of eligible students"),
+            @ApiResponse(responseCode = "401", description = "Unauthenticated"),
+            @ApiResponse(responseCode = "403", description = "Forbidden - only supervisor can search eligible students"),
+            @ApiResponse(responseCode = "404", description = "Project not found")
+    })
+    public ResponseEntity<List<com.scholarsync.dto.auth.UserResponse>> getEligibleStudents(
+            @PathVariable Long id,
+            @RequestParam(required = false) String query,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        List<com.scholarsync.dto.auth.UserResponse> students = projectService.getEligibleStudents(id, query, currentUser);
+        return ResponseEntity.ok(students);
+    }
 }

@@ -3,7 +3,7 @@ package com.scholarsync.entity;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * Memento representing the immutable deliverable snapshot of a research submission.
@@ -17,5 +17,6 @@ public class SubmissionSnapshot {
     private final String artifactLocation;
     private final Long submittedById;
     private final String submittedByName;
-    private final LocalDateTime timestamp;
+    private final Instant timestamp;
 }
+

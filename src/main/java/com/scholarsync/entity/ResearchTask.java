@@ -42,6 +42,10 @@ public class ResearchTask extends BaseAuditableEntity {
     @Builder.Default
     private TaskStateEnum currentState = TaskStateEnum.PROPOSED;
 
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private java.util.List<ResearchSubmission> submissions = new java.util.ArrayList<>();
+
     public void transitionTo(TaskState currentStateHandler, TaskStateEnum targetState, User currentUser) {
         currentStateHandler.transition(this, targetState, currentUser);
     }

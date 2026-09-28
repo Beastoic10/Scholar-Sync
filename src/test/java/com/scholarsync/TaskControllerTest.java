@@ -49,12 +49,21 @@ public class TaskControllerTest {
     @Autowired
     private ResearchTaskRepository taskRepository;
 
+    @Autowired
+    private com.scholarsync.repository.ResearchSubmissionRepository submissionRepository;
+
+    @Autowired
+    private com.scholarsync.repository.SubmissionFeedbackRepository feedbackRepository;
+
     @BeforeEach
     void setUp() {
+        feedbackRepository.deleteAll();
+        submissionRepository.deleteAll();
         taskRepository.deleteAll();
         projectRepository.deleteAll();
         userRepository.deleteAll();
     }
+
 
     private String registerAndGetToken(String name, String email, String password, Role role) throws Exception {
         RegisterRequest register = RegisterRequest.builder()

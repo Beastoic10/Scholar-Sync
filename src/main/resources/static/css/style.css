@@ -575,3 +575,101 @@ body {
   padding: 3rem;
   color: var(--text-muted);
 }
+
+/* DELIVERABLES & SUBMISSIONS */
+.modal-dialog-large {
+  max-width: 760px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.deliverables-header-badge {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+.submission-card {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.submission-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.submission-version-pill {
+  background: rgba(99, 102, 241, 0.2);
+  color: var(--primary);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+.status-pill {
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-pill.DRAFT { background: rgba(148, 163, 184, 0.2); color: var(--text-secondary); }
+.status-pill.SUBMITTED { background: rgba(56, 189, 248, 0.2); color: var(--col-proposed); }
+.status-pill.UNDER_REVIEW { background: rgba(234, 179, 8, 0.2); color: var(--warning); }
+.status-pill.APPROVED { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+.status-pill.REJECTED { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+
+.artifact-box {
+  margin: 0.75rem 0;
+  padding: 0.6rem 0.85rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 0.82rem;
+  word-break: break-all;
+}
+
+.artifact-box a {
+  color: #38bdf8;
+  text-decoration: underline;
+}
+
+.feedback-thread {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.feedback-bubble {
+  background: rgba(30, 41, 59, 0.7);
+  border-left: 3px solid var(--accent);
+  padding: 0.6rem 0.85rem;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.feedback-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.snapshot-modal-body pre {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #a5f3fc;
+  overflow-x: auto;
+}

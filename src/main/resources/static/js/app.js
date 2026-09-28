@@ -7,7 +7,8 @@ const AppState = {
   token: localStorage.getItem('scholarsync_token') || null,
   user: JSON.parse(localStorage.getItem('scholarsync_user')) || null,
   currentProject: null,
-  currentTasks: []
+  currentTasks: [],
+  currentTaskId: null
 };
 
 // API HELPER
@@ -178,6 +179,7 @@ function setupEventListeners() {
   });
 
   document.getElementById('btn-open-add-member').addEventListener('click', () => {
+    loadEligibleStudents(AppState.currentProject?.id);
     document.getElementById('modal-add-member').style.display = 'flex';
   });
 
@@ -232,7 +234,14 @@ function setupEventListeners() {
   // Add Member Form
   document.getElementById('form-add-member').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const studentId = parseInt(document.getElementById('member-student-id').value, 10);
+    const selectVal = document.getElementById('member-student-select').value;
+    const manualVal = document.getElementById('member-student-id').value;
+    const studentId = selectVal ? parseInt(selectVal, 10) : (manualVal ? parseInt(manualVal, 10) : null);
+
+    if (!studentId) {
+      showToast('Please select or enter a student ID', 'error');
+      return;
+    }
 
     try {
       const updatedProject = await apiCall(`/api/projects/${AppState.currentProject.id}/students/${studentId}`, {
@@ -245,6 +254,17 @@ function setupEventListeners() {
       showToast('Student successfully assigned to project!', 'success');
       renderProjectHeader(updatedProject);
     } catch {}
+  });
+
+  // Submit Deliverable Form (Submit for Review)
+  document.getElementById('form-submit-deliverable').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await handleDeliverableSubmit(false);
+  });
+
+  // Save Deliverable as Draft
+  document.getElementById('btn-save-draft').addEventListener('click', async () => {
+    await handleDeliverableSubmit(true);
   });
 }
 
@@ -457,7 +477,10 @@ function renderTaskCard(task) {
         <span class="unassigned-badge">Unassigned</span>
       `}
     </div>
-    <div class="task-actions">
+    <div class="task-actions" style="margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;">
+      <button class="btn btn-sm btn-outline" style="border-color: rgba(99, 102, 241, 0.4);" onclick="openDeliverables(${task.id})">
+        📦 Deliverables
+      </button>
       ${actionButtonsHtml}
       ${deleteBtnHtml}
     </div>
@@ -490,6 +513,207 @@ async function deleteTask(taskId) {
   } catch {}
 }
 
+// ELIGIBLE STUDENTS LOADER
+async function loadEligibleStudents(projectId) {
+  const select = document.getElementById('member-student-select');
+  if (!projectId || !select) return;
+
+  select.innerHTML = '<option value="">-- Loading eligible students... --</option>';
+
+  try {
+    const students = await apiCall(`/api/projects/${projectId}/eligible-students`);
+    if (!students || students.length === 0) {
+      select.innerHTML = '<option value="">-- No other eligible students available --</option>';
+      return;
+    }
+
+    select.innerHTML = '<option value="">-- Select a registered student --</option>' +
+      students.map(s => `<option value="${s.id}">${escapeHtml(s.name)} (${escapeHtml(s.email)}) [ID: ${s.id}]</option>`).join('');
+  } catch (error) {
+    select.innerHTML = '<option value="">-- Failed to load eligible students --</option>';
+  }
+}
+
+// DELIVERABLES / SUBMISSIONS ENGINE
+async function openDeliverables(taskId) {
+  AppState.currentTaskId = taskId;
+  const task = AppState.currentTasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  document.getElementById('deliv-modal-title').innerText = `Deliverables: ${task.title}`;
+  const stateBadge = document.getElementById('deliv-modal-state');
+  stateBadge.innerText = task.currentState.replace('_', ' ');
+  stateBadge.className = `role-pill ${task.currentState}`;
+
+  document.getElementById('deliv-modal-assignee').innerText = task.assignedStudent
+    ? `👤 ${task.assignedStudent.name}`
+    : 'Unassigned';
+
+  document.getElementById('modal-deliverables').style.display = 'flex';
+  await loadTaskSubmissions(taskId);
+}
+
+async function loadTaskSubmissions(taskId) {
+  const container = document.getElementById('submissions-list-container');
+  container.innerHTML = '<div class="empty-state">Loading deliverables...</div>';
+
+  try {
+    const submissions = await apiCall(`/api/tasks/${taskId}/submissions`);
+    document.getElementById('deliv-version-count').innerText = `${submissions ? submissions.length : 0} Versions`;
+    renderSubmissions(submissions || [], taskId);
+  } catch (error) {
+    container.innerHTML = `<div class="empty-state">Failed to load deliverables: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderSubmissions(submissions, taskId) {
+  const container = document.getElementById('submissions-list-container');
+  const isSupervisor = AppState.user?.role === 'SUPERVISOR';
+
+  if (!submissions || submissions.length === 0) {
+    container.innerHTML = '<div class="empty-state">No deliverables submitted for this task yet. Students can submit deliverables using the form below.</div>';
+    return;
+  }
+
+  container.innerHTML = submissions.map(sub => {
+    const feedbackItemsHtml = (sub.feedbackList && sub.feedbackList.length > 0)
+      ? sub.feedbackList.map(f => `
+          <div class="feedback-bubble">
+            <div class="feedback-meta">
+              <strong>${escapeHtml(f.supervisor?.name || 'Supervisor')}</strong> • ${new Date(f.createdAt).toLocaleString()}
+            </div>
+            <div>${escapeHtml(f.comment)}</div>
+          </div>
+        `).join('')
+      : '<p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.35rem;">No supervisor review feedback yet.</p>';
+
+    const supervisorActionsHtml = isSupervisor ? `
+      <div style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; background: rgba(0,0,0,0.25); padding: 0.75rem; border-radius: 6px;">
+        <div style="display: flex; gap: 0.5rem;">
+          <input type="text" id="feedback-input-${sub.id}" placeholder="Write supervisor review feedback..." style="flex: 1; padding: 0.4rem 0.6rem; font-size: 0.8rem;" />
+          <button class="btn btn-sm btn-outline" onclick="addSupervisorFeedback(${sub.id})">Add Feedback</button>
+        </div>
+        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+          <button class="btn btn-sm btn-primary" style="background-color: var(--success);" onclick="updateSubmissionStatus(${sub.id}, 'APPROVED')">✓ Approve Version</button>
+          <button class="btn btn-sm btn-danger" onclick="updateSubmissionStatus(${sub.id}, 'REJECTED')">✕ Reject Version</button>
+        </div>
+      </div>
+    ` : '';
+
+    return `
+      <div class="submission-card">
+        <div class="submission-meta">
+          <div>
+            <span class="submission-version-pill">${escapeHtml(sub.versionNumber)}</span>
+            <strong style="margin-left: 0.5rem; font-size: 0.95rem;">${escapeHtml(sub.title)}</strong>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <span class="status-pill ${sub.status}">${sub.status}</span>
+            <button class="btn btn-sm btn-outline" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;" onclick="viewSnapshot(${sub.id})">
+              📜 Memento Snapshot
+            </button>
+          </div>
+        </div>
+
+        ${sub.description ? `<p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">${escapeHtml(sub.description)}</p>` : ''}
+
+        ${sub.artifactLocation ? `
+          <div class="artifact-box">
+            📦 <strong>Artifact:</strong> <a href="${escapeHtml(sub.artifactLocation)}" target="_blank" rel="noopener noreferrer">${escapeHtml(sub.artifactLocation)}</a>
+          </div>
+        ` : ''}
+
+        <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; justify-content: space-between;">
+          <span>Submitted by: <strong>${escapeHtml(sub.submittedBy?.name || 'Unknown')}</strong></span>
+          <span>${sub.createdAt ? new Date(sub.createdAt).toLocaleString() : ''}</span>
+        </div>
+
+        <div class="feedback-thread">
+          <strong style="font-size: 0.8rem; color: var(--accent);">Supervisor Feedback & Review Thread:</strong>
+          ${feedbackItemsHtml}
+          ${supervisorActionsHtml}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function handleDeliverableSubmit(isDraft) {
+  if (!AppState.currentTaskId) {
+    showToast('No active task selected', 'error');
+    return;
+  }
+
+  const title = document.getElementById('new-sub-title').value;
+  const description = document.getElementById('new-sub-desc').value;
+  const artifactLocation = document.getElementById('new-sub-artifact').value;
+
+  if (!title || !title.trim()) {
+    showToast('Deliverable title is required', 'error');
+    return;
+  }
+
+  try {
+    const response = await apiCall(`/api/tasks/${AppState.currentTaskId}/submissions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        title: title.trim(),
+        description: description ? description.trim() : null,
+        artifactLocation: artifactLocation ? artifactLocation.trim() : null,
+        draft: isDraft
+      })
+    });
+
+    document.getElementById('form-submit-deliverable').reset();
+    showToast(`Deliverable ${response.versionNumber} submitted successfully!`, 'success');
+
+    await loadTaskSubmissions(AppState.currentTaskId);
+    await loadProjectTasks(AppState.currentProject.id);
+  } catch {}
+}
+
+async function viewSnapshot(submissionId) {
+  try {
+    const snapshot = await apiCall(`/api/submissions/${submissionId}/snapshot`);
+    document.getElementById('snapshot-json-display').textContent = JSON.stringify(snapshot, null, 2);
+    document.getElementById('modal-snapshot').style.display = 'flex';
+  } catch (error) {
+    showToast(`Could not load snapshot: ${error.message}`, 'error');
+  }
+}
+
+async function addSupervisorFeedback(submissionId) {
+  const input = document.getElementById(`feedback-input-${submissionId}`);
+  if (!input || !input.value.trim()) {
+    showToast('Feedback comment cannot be blank', 'error');
+    return;
+  }
+
+  try {
+    await apiCall(`/api/submissions/${submissionId}/feedback`, {
+      method: 'POST',
+      body: JSON.stringify({ comment: input.value.trim() })
+    });
+
+    showToast('Review feedback posted!', 'success');
+    input.value = '';
+    await loadTaskSubmissions(AppState.currentTaskId);
+  } catch {}
+}
+
+async function updateSubmissionStatus(submissionId, status) {
+  try {
+    const updated = await apiCall(`/api/submissions/${submissionId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status })
+    });
+
+    showToast(`Deliverable status updated to ${status}!`, 'success');
+    await loadTaskSubmissions(AppState.currentTaskId);
+    await loadProjectTasks(AppState.currentProject.id);
+  } catch {}
+}
+
 // HTML ESCAPING
 function escapeHtml(str) {
   if (!str) return '';
@@ -500,3 +724,4 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+

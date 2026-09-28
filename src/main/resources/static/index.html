@@ -234,9 +234,15 @@
         </div>
         <form id="form-add-member">
           <div class="form-group">
-            <label for="member-student-id">Student User ID</label>
-            <input type="number" id="member-student-id" required placeholder="Enter student user ID (e.g. 2)" />
-            <small class="form-hint">Enter the ID of a registered user with STUDENT role.</small>
+            <label for="member-student-select">Select Eligible Student</label>
+            <select id="member-student-select">
+              <option value="">-- Loading eligible students... --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="member-student-id">Or Enter Student User ID Manually</label>
+            <input type="number" id="member-student-id" placeholder="e.g. 2" />
+            <small class="form-hint">Select from eligible students above or enter an ID directly.</small>
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-close="modal-add-member">Cancel</button>
@@ -246,8 +252,76 @@
       </div>
     </div>
 
+    <!-- Modal: Task Deliverables & Submissions -->
+    <div id="modal-deliverables" class="modal-backdrop" style="display: none;">
+      <div class="modal-dialog modal-dialog-large">
+        <div class="modal-header">
+          <div>
+            <h3 id="deliv-modal-title">Task Deliverables</h3>
+            <div class="deliverables-header-badge">
+              <span id="deliv-modal-state" class="role-pill">PROPOSED</span>
+              <span id="deliv-modal-assignee" class="assigned-badge">Unassigned</span>
+            </div>
+          </div>
+          <button class="modal-close" data-close="modal-deliverables">&times;</button>
+        </div>
+
+        <!-- Section: Submission History -->
+        <div class="section-container" style="margin-bottom: 1.5rem;">
+          <h4 style="margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
+            <span>Submission Versions & Feedback</span>
+            <span id="deliv-version-count" class="badge-phase">0 Versions</span>
+          </h4>
+          <div id="submissions-list-container">
+            <div class="empty-state">No deliverables submitted for this task yet.</div>
+          </div>
+        </div>
+
+        <!-- Section: Submit New Version -->
+        <div class="section-container" id="new-submission-section" style="border-top: 1px solid var(--border-color); padding-top: 1.25rem;">
+          <h4 style="margin-bottom: 0.75rem;">Submit New Deliverable Version</h4>
+          <form id="form-submit-deliverable">
+            <div class="form-group">
+              <label for="new-sub-title">Deliverable Title</label>
+              <input type="text" id="new-sub-title" required placeholder="e.g. Experiment Results & Benchmark Graphs" />
+            </div>
+            <div class="form-group">
+              <label for="new-sub-desc">Description / Release Notes</label>
+              <textarea id="new-sub-desc" rows="2" placeholder="Summary of changes, hypotheses tested, methodologies..."></textarea>
+            </div>
+            <div class="form-group">
+              <label for="new-sub-artifact">Artifact Location (URL / Repository / Document Link)</label>
+              <input type="text" id="new-sub-artifact" placeholder="https://github.com/... or https://drive.google.com/..." />
+            </div>
+            <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1rem;">
+              <button type="button" id="btn-save-draft" class="btn btn-secondary">Save as Draft</button>
+              <button type="submit" class="btn btn-primary">Submit for Review</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Memento Snapshot Viewer -->
+    <div id="modal-snapshot" class="modal-backdrop" style="display: none;">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3>Deliverable Snapshot (Memento)</h3>
+          <button class="modal-close" data-close="modal-snapshot">&times;</button>
+        </div>
+        <div class="snapshot-modal-body">
+          <p class="subtitle" style="margin-bottom: 0.75rem;">Immutable snapshot of the deliverable deliverables at the moment of versioning.</p>
+          <pre id="snapshot-json-display">Loading snapshot...</pre>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modal-snapshot">Close</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script src="/js/app.js"></script>
+
 </body>
 </html>

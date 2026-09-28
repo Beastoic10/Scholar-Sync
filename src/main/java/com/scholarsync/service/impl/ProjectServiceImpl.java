@@ -123,4 +123,20 @@ public class ProjectServiceImpl implements ProjectService {
 
         return ProjectResponse.fromEntity(updated);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.scholarsync.dto.auth.UserResponse> getEligibleStudents(Long projectId, String query, UserPrincipal currentUser) {
+        ResearchProject project = projectRepository.findByIdWithDetails(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("ResearchProject", "id", projectId));
+
+        if (!project.getSupervisor().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("Only the project supervisor can view eligible students for this project");
+        }
+
+        List<User> students = userRepository.searchEligibleStudentsForProject(projectId, query != null ? query.trim() : null);
+        return students.stream()
+                .map(com.scholarsync.dto.auth.UserResponse::fromEntity)
+                .collect(Collectors.toList());
+    }
 }
