@@ -151,6 +151,34 @@ export const submissionApi = {
       body: JSON.stringify({ comment }),
     }),
 
+  uploadSubmission: async (taskId: number, formData: FormData): Promise<Submission> => {
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`/api/tasks/${taskId}/submissions/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const errorMsg = data?.message || data?.error || `Upload failed (${response.status})`;
+      throw new Error(errorMsg);
+    }
+    return data as Submission;
+  },
+
+  reanalyzeSubmission: (id: number) =>
+    apiCall<Submission>(`/api/submissions/${id}/reanalyze`, {
+      method: 'POST',
+    }),
+
+  getFileUrl: (id: number) => `/api/submissions/${id}/file`,
+
   getSnapshot: (id: number) =>
     apiCall<SubmissionSnapshot>(`/api/submissions/${id}/snapshot`),
 };

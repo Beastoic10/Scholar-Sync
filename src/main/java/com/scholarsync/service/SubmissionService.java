@@ -28,4 +28,10 @@ public interface SubmissionService {
     SubmissionResponse rejectSubmission(Long submissionId, FeedbackRequest feedbackRequest, UserPrincipal currentUser);
 
     FeedbackResponse addFeedback(Long submissionId, FeedbackRequest request, UserPrincipal currentUser);
+
+    SubmissionResponse uploadSubmission(Long taskId, org.springframework.web.multipart.MultipartFile file, String title, String description, Boolean draft, UserPrincipal currentUser);
+
+    org.springframework.core.io.Resource getSubmissionFile(Long submissionId, UserPrincipal currentUser);
+
+    SubmissionResponse reanalyzeSubmission(Long submissionId, UserPrincipal currentUser);
 }

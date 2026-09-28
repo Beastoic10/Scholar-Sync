@@ -45,6 +45,26 @@ public class SubmissionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @PostMapping(value = "/api/tasks/{taskId}/submissions/upload", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload research document submission", description = "Uploads a PDF or DOCX research deliverable, extracts text, triggers document analysis, and creates a new immutable version.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Submission created and analysis initiated"),
+            @ApiResponse(responseCode = "400", description = "Invalid file or unsupported format"),
+            @ApiResponse(responseCode = "401", description = "Unauthenticated"),
+            @ApiResponse(responseCode = "403", description = "Forbidden - unauthorized"),
+            @ApiResponse(responseCode = "404", description = "Task not found")
+    })
+    public ResponseEntity<SubmissionResponse> uploadSubmission(
+            @PathVariable Long taskId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam(value = "title", required = false) String title,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "draft", defaultValue = "false") Boolean draft,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        SubmissionResponse response = submissionService.uploadSubmission(taskId, file, title, description, draft, currentUser);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
     @GetMapping("/api/tasks/{taskId}/submissions")
     @Operation(summary = "Get task submissions", description = "Retrieves all deliverable versions submitted for the specified task, including feedback history.")
     @ApiResponses({
@@ -157,6 +177,49 @@ public class SubmissionController {
             @AuthenticationPrincipal UserPrincipal currentUser) {
         FeedbackResponse response = submissionService.addFeedback(id, request, currentUser);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/api/submissions/{id}/file")
+    @Operation(summary = "Download or view submission document", description = "Retrieves the stored PDF or DOCX deliverable document for an authorized project member.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Document stream retrieved"),
+            @ApiResponse(responseCode = "401", description = "Unauthenticated"),
+            @ApiResponse(responseCode = "403", description = "Forbidden - not a member of project"),
+            @ApiResponse(responseCode = "404", description = "Submission or file not found")
+    })
+    public ResponseEntity<org.springframework.core.io.Resource> getSubmissionFile(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        SubmissionResponse sub = submissionService.getSubmissionById(id, currentUser);
+        org.springframework.core.io.Resource resource = submissionService.getSubmissionFile(id, currentUser);
+
+        String filename = sub.getFileName() != null ? sub.getFileName() : "document";
+        String contentType = "application/octet-stream";
+        if (filename.toLowerCase().endsWith(".pdf")) {
+            contentType = "application/pdf";
+        } else if (filename.toLowerCase().endsWith(".docx")) {
+            contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        }
+
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
+                .body(resource);
+    }
+
+    @PostMapping("/api/submissions/{id}/reanalyze")
+    @Operation(summary = "Re-analyze document submission", description = "Triggers fresh FastAPI document analysis for this submission version.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Analysis rerun successfully"),
+            @ApiResponse(responseCode = "401", description = "Unauthenticated"),
+            @ApiResponse(responseCode = "403", description = "Forbidden"),
+            @ApiResponse(responseCode = "404", description = "Submission not found")
+    })
+    public ResponseEntity<SubmissionResponse> reanalyzeSubmission(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        SubmissionResponse response = submissionService.reanalyzeSubmission(id, currentUser);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/api/submissions/{id}/snapshot")

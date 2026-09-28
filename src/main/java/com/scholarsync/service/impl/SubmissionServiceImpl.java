@@ -36,6 +36,9 @@ public class SubmissionServiceImpl implements SubmissionService {
     private final SubmissionFeedbackRepository feedbackRepository;
     private final ResearchTaskRepository taskRepository;
     private final UserRepository userRepository;
+    private final com.scholarsync.service.storage.StorageService storageService;
+    private final com.scholarsync.service.extraction.DocumentTextExtractor documentTextExtractor;
+    private final com.scholarsync.service.analysis.DocumentAnalysisService documentAnalysisService;
 
     @Override
     @Transactional
@@ -61,6 +64,9 @@ public class SubmissionServiceImpl implements SubmissionService {
                 .title(request.getTitle().trim())
                 .description(request.getDescription() != null ? request.getDescription().trim() : null)
                 .artifactLocation(request.getArtifactLocation() != null ? request.getArtifactLocation().trim() : null)
+                .fileName(request.getFileName() != null ? request.getFileName().trim() : null)
+                .filePath(request.getFilePath() != null ? request.getFilePath().trim() : null)
+                .extractedText(request.getExtractedText() != null ? request.getExtractedText().trim() : null)
                 .status(initialStatus)
                 .build();
 
@@ -68,8 +74,102 @@ public class SubmissionServiceImpl implements SubmissionService {
         log.info("Created submission '{}' ({}) for task id: '{}' by user: '{}', status: '{}'",
                 savedSubmission.getTitle(), nextVersion, taskId, submitter.getEmail(), initialStatus);
 
+        if (initialStatus == SubmissionStatus.SUBMITTED && savedSubmission.getExtractedText() != null && !savedSubmission.getExtractedText().trim().isEmpty()) {
+            try {
+                documentAnalysisService.analyzeSubmission(savedSubmission);
+                savedSubmission = submissionRepository.findByIdWithDetails(savedSubmission.getId()).orElse(savedSubmission);
+            } catch (Exception e) {
+                log.warn("Analysis failed during submission creation: {}", e.getMessage());
+            }
+        }
+
         // Note: Task state is intentionally KEPT SEPARATE from submission status.
         return SubmissionResponse.fromEntity(savedSubmission);
+    }
+
+    @Override
+    @Transactional
+    public SubmissionResponse uploadSubmission(Long taskId, org.springframework.web.multipart.MultipartFile file, String title, String description, Boolean draft, UserPrincipal currentUser) {
+        ResearchTask task = taskRepository.findByIdWithDetails(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("ResearchTask", "id", taskId));
+
+        validateSubmissionCreationAccess(task, currentUser);
+
+        User submitter = userRepository.findById(currentUser.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", currentUser.getId()));
+
+        String effectiveTitle = (title != null && !title.trim().isEmpty())
+                ? title.trim()
+                : (file.getOriginalFilename() != null ? file.getOriginalFilename() : "Research Submission");
+
+        String nextVersion = computeNextVersion(taskId);
+
+        SubmissionStatus initialStatus = Boolean.TRUE.equals(draft)
+                ? SubmissionStatus.DRAFT
+                : SubmissionStatus.SUBMITTED;
+
+        String storedPath = storageService.storeFile(file, taskId, nextVersion);
+        String extractedText = null;
+        try (java.io.InputStream is = file.getInputStream()) {
+            extractedText = documentTextExtractor.extractText(is, file.getOriginalFilename());
+        } catch (Exception e) {
+            log.warn("Failed to extract text from uploaded document '{}': {}", file.getOriginalFilename(), e.getMessage());
+        }
+
+        ResearchSubmission submission = ResearchSubmission.builder()
+                .task(task)
+                .versionNumber(nextVersion)
+                .submittedBy(submitter)
+                .title(effectiveTitle)
+                .description(description != null ? description.trim() : null)
+                .fileName(file.getOriginalFilename())
+                .filePath(storedPath)
+                .extractedText(extractedText)
+                .status(initialStatus)
+                .build();
+
+        ResearchSubmission savedSubmission = submissionRepository.save(submission);
+        log.info("Uploaded submission '{}' ({}) file: '{}' for task id: '{}' by user: '{}', status: '{}'",
+                savedSubmission.getTitle(), nextVersion, file.getOriginalFilename(), taskId, submitter.getEmail(), initialStatus);
+
+        if (initialStatus == SubmissionStatus.SUBMITTED && savedSubmission.getExtractedText() != null && !savedSubmission.getExtractedText().trim().isEmpty()) {
+            try {
+                documentAnalysisService.analyzeSubmission(savedSubmission);
+                savedSubmission = submissionRepository.findByIdWithDetails(savedSubmission.getId()).orElse(savedSubmission);
+            } catch (Exception e) {
+                log.warn("Analysis failed during upload processing: {}", e.getMessage());
+            }
+        }
+
+        return SubmissionResponse.fromEntity(savedSubmission);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.core.io.Resource getSubmissionFile(Long submissionId, UserPrincipal currentUser) {
+        ResearchSubmission submission = submissionRepository.findByIdWithDetails(submissionId)
+                .orElseThrow(() -> new ResourceNotFoundException("ResearchSubmission", "id", submissionId));
+
+        validateTaskProjectAccess(submission.getTask(), currentUser.getId());
+
+        if (submission.getFilePath() == null || submission.getFilePath().trim().isEmpty()) {
+            throw new ResourceNotFoundException("Submission document", "submissionId", submissionId);
+        }
+
+        return storageService.loadAsResource(submission.getFilePath());
+    }
+
+    @Override
+    @Transactional
+    public SubmissionResponse reanalyzeSubmission(Long submissionId, UserPrincipal currentUser) {
+        ResearchSubmission submission = submissionRepository.findByIdWithDetails(submissionId)
+                .orElseThrow(() -> new ResourceNotFoundException("ResearchSubmission", "id", submissionId));
+
+        validateTaskProjectAccess(submission.getTask(), currentUser.getId());
+
+        documentAnalysisService.analyzeSubmission(submission);
+        ResearchSubmission updated = submissionRepository.findByIdWithDetails(submissionId).orElse(submission);
+        return SubmissionResponse.fromEntity(updated);
     }
 
     @Override
@@ -126,6 +226,15 @@ public class SubmissionServiceImpl implements SubmissionService {
         ResearchSubmission updated = submissionRepository.save(submission);
         log.info("Submission id: '{}' transitioned from DRAFT to SUBMITTED by author: '{}'",
                 submissionId, currentUser.getEmail());
+
+        if (updated.getExtractedText() != null && !updated.getExtractedText().trim().isEmpty()) {
+            try {
+                documentAnalysisService.analyzeSubmission(updated);
+                updated = submissionRepository.findByIdWithDetails(updated.getId()).orElse(updated);
+            } catch (Exception e) {
+                log.warn("Analysis failed during draft submission: {}", e.getMessage());
+            }
+        }
 
         return SubmissionResponse.fromEntity(updated);
     }

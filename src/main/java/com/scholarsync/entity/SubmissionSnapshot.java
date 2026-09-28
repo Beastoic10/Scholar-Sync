@@ -15,6 +15,8 @@ public class SubmissionSnapshot {
     private final String title;
     private final String description;
     private final String artifactLocation;
+    private final String fileName;
+    private final String filePath;
     private final Long submittedById;
     private final String submittedByName;
     private final Instant timestamp;

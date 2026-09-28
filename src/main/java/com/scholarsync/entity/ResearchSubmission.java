@@ -46,10 +46,22 @@ public class ResearchSubmission extends BaseAuditableEntity {
     @Column(name = "artifact_location", length = 500)
     private String artifactLocation;
 
+    @Column(name = "file_name", length = 255)
+    private String fileName;
+
+    @Column(name = "file_path", length = 500)
+    private String filePath;
+
+    @Column(name = "extracted_text", columnDefinition = "TEXT")
+    private String extractedText;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     @Builder.Default
     private SubmissionStatus status = SubmissionStatus.SUBMITTED;
+
+    @OneToOne(mappedBy = "submission", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private AnalysisReport analysisReport;
 
     @OneToMany(mappedBy = "submission", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("createdAt ASC")
@@ -70,6 +82,8 @@ public class ResearchSubmission extends BaseAuditableEntity {
                 .title(this.title)
                 .description(this.description)
                 .artifactLocation(this.artifactLocation)
+                .fileName(this.fileName)
+                .filePath(this.filePath)
                 .submittedById(this.submittedBy != null ? this.submittedBy.getId() : null)
                 .submittedByName(this.submittedBy != null ? this.submittedBy.getName() : null)
                 .timestamp(this.getCreatedAt())

@@ -22,6 +22,10 @@ public class CreateSubmissionRequest {
     @Size(max = 500, message = "Artifact location cannot exceed 500 characters")
     private String artifactLocation;
 
+    private String fileName;
+    private String filePath;
+    private String extractedText;
+
     @Builder.Default
     private Boolean draft = false;
 }

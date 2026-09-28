@@ -27,7 +27,10 @@ public class SubmissionResponse {
     private String title;
     private String description;
     private String artifactLocation;
+    private String fileName;
+    private String filePath;
     private SubmissionStatus status;
+    private AnalysisReportResponse analysisReport;
     private List<FeedbackResponse> feedbackList;
     private Instant createdAt;
     private Instant updatedAt;
@@ -53,7 +56,10 @@ public class SubmissionResponse {
                 .title(submission.getTitle())
                 .description(submission.getDescription())
                 .artifactLocation(submission.getArtifactLocation())
+                .fileName(submission.getFileName())
+                .filePath(submission.getFilePath())
                 .status(submission.getStatus())
+                .analysisReport(AnalysisReportResponse.fromEntity(submission.getAnalysisReport()))
                 .feedbackList(feedbacks)
                 .createdAt(submission.getCreatedAt())
                 .updatedAt(submission.getUpdatedAt())

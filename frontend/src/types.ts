@@ -45,6 +45,38 @@ export type SubmissionStatus =
   | 'APPROVED' 
   | 'REJECTED';
 
+export type AnalysisStatus =
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'FAILED';
+
+export interface CitationDetail {
+  doi?: string;
+  raw_reference?: string;
+  verified: boolean;
+  title?: string;
+  container_title?: string;
+  publisher?: string;
+  message?: string;
+}
+
+export interface AnalysisReport {
+  id: number;
+  similarityScore?: number | null;
+  similarityType?: string;
+  comparedDocumentsCount?: number;
+  aiDetectionResult?: string | null;
+  aiDetectionStatus?: string;
+  aiDetectionError?: string | null;
+  totalCitations: number;
+  verifiedCitations: number;
+  unverifiedCitations: number;
+  citationDetails?: string | null;
+  status: AnalysisStatus;
+  failureReason?: string | null;
+  analyzedAt?: string | null;
+}
+
 export interface SubmissionFeedback {
   id: number;
   submissionId: number;
@@ -62,7 +94,10 @@ export interface Submission {
   title: string;
   description?: string;
   artifactLocation?: string;
+  fileName?: string;
+  filePath?: string;
   status: SubmissionStatus;
+  analysisReport?: AnalysisReport | null;
   feedbackList: SubmissionFeedback[];
   createdAt: string;
   updatedAt: string;
@@ -73,6 +108,8 @@ export interface SubmissionSnapshot {
   title: string;
   description?: string;
   artifactLocation?: string;
+  fileName?: string;
+  filePath?: string;
   submittedById: number;
   submittedByName: string;
   timestamp: string;

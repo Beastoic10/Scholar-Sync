@@ -22,6 +22,7 @@ public interface ResearchSubmissionRepository extends JpaRepository<ResearchSubm
            "LEFT JOIN FETCH s.submittedBy " +
            "LEFT JOIN FETCH s.feedbackList f " +
            "LEFT JOIN FETCH f.supervisor " +
+           "LEFT JOIN FETCH s.analysisReport " +
            "WHERE s.id = :id")
     Optional<ResearchSubmission> findByIdWithDetails(@Param("id") Long id);
 
@@ -29,6 +30,7 @@ public interface ResearchSubmissionRepository extends JpaRepository<ResearchSubm
            "LEFT JOIN FETCH s.task t " +
            "LEFT JOIN FETCH t.project p " +
            "LEFT JOIN FETCH s.submittedBy " +
+           "LEFT JOIN FETCH s.analysisReport " +
            "WHERE s.task.id = :taskId " +
            "ORDER BY s.createdAt ASC")
     List<ResearchSubmission> findByTaskIdWithDetails(@Param("taskId") Long taskId);
@@ -39,4 +41,7 @@ public interface ResearchSubmissionRepository extends JpaRepository<ResearchSubm
 
     @Query("SELECT s.versionNumber FROM ResearchSubmission s WHERE s.task.id = :taskId")
     List<String> findVersionNumbersByTaskId(@Param("taskId") Long taskId);
+
+    @Query("SELECT s.extractedText FROM ResearchSubmission s WHERE s.extractedText IS NOT NULL AND TRIM(s.extractedText) <> '' AND s.id <> :excludeId")
+    List<String> findExtractedTextsForComparison(@Param("excludeId") Long excludeId);
 }

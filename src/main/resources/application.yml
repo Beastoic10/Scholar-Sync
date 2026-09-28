@@ -20,6 +20,19 @@ spring:
         format_sql: true
         jdbc:
           batch_size: 20
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+analysis:
+  service:
+    url: ${ANALYSIS_SERVICE_URL:http://localhost:8000}
+
+app:
+  storage:
+    upload-dir: ${UPLOAD_DIR:uploads/submissions}
 
 # JWT Security Configuration
 jwt:
