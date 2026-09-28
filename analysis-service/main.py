@@ -20,7 +20,7 @@ logger = logging.getLogger("analysis-service")
 
 app = FastAPI(
     title="ScholarSync Document Analysis Service",
-    description="Microservice providing real document analysis: Internal Similarity (MiniLM-L6-v2), AI Detection (Hugging Face roberta-base-openai-detector), and Citation Verification (Crossref REST API).",
+    description="Microservice providing real document analysis: Internal Similarity (MiniLM-L6-v2), AI Detection (Hugging Face chatgpt-detector-roberta), and Citation Verification (Crossref REST API).",
     version="1.0.0"
 )
 
@@ -151,9 +151,15 @@ def verify_doi_crossref(doi: str) -> CitationItem:
             message=f"Verification failed: {str(e)}"
         )
 
+# AI detection model: Hello-SimpleAI/chatgpt-detector-roberta
+# Supported by HF Inference router (text-classification pipeline).
+# roberta-base-openai-detector is NOT supported by the HF Inference provider.
+AI_DETECTION_MODEL = "Hello-SimpleAI/chatgpt-detector-roberta"
+
 def run_ai_detection(text: str) -> Dict[str, Any]:
     """
-    Calls Hugging Face Inference API for roberta-base-openai-detector.
+    Calls Hugging Face Inference API for AI-generated text detection.
+    Uses Hello-SimpleAI/chatgpt-detector-roberta (text-classification).
     Never invents or fabricates scores if the API fails or token is missing.
     """
     hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
@@ -165,8 +171,8 @@ def run_ai_detection(text: str) -> Dict[str, Any]:
             "error": "HF_TOKEN is not configured on analysis service. Real model inference unavailable."
         }
 
-    # Model input: RoBERTa has 512 token limit, truncate input string to reasonable max length (~1800 chars)
-    payload_text = text[:2000].strip()
+    # Model input: RoBERTa has 512 token limit, truncate to ~1800 chars
+    payload_text = text[:1800].strip()
     if not payload_text:
         return {
             "status": "UNAVAILABLE",
@@ -174,12 +180,13 @@ def run_ai_detection(text: str) -> Dict[str, Any]:
             "error": "Document text is empty"
         }
 
+    token = hf_token.strip()
     hf_endpoints = [
-        "https://router.huggingface.co/hf-inference/models/roberta-base-openai-detector",
-        "https://api-inference.huggingface.co/models/roberta-base-openai-detector"
+        f"https://router.huggingface.co/hf-inference/models/{AI_DETECTION_MODEL}",
+        f"https://api-inference.huggingface.co/models/{AI_DETECTION_MODEL}",
     ]
     headers = {
-        "Authorization": f"Bearer {hf_token.strip()}",
+        "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
         "x-wait-for-model": "true"
     }
@@ -187,29 +194,32 @@ def run_ai_detection(text: str) -> Dict[str, Any]:
     last_error = None
     for hf_url in hf_endpoints:
         try:
-            response = requests.post(hf_url, headers=headers, json={"inputs": payload_text}, timeout=15)
+            logger.info("Attempting AI detection via %s", hf_url)
+            response = requests.post(
+                hf_url,
+                headers=headers,
+                json={"inputs": payload_text},
+                timeout=30
+            )
             if response.status_code == 200:
                 result_json = response.json()
-                logger.info("Hugging Face AI detection inference succeeded using %s", hf_url)
+                logger.info("AI detection inference succeeded using %s", hf_url)
                 return {
                     "status": "SUCCESS",
                     "result": result_json,
                     "error": None
                 }
             else:
-                last_error = f"Hugging Face API returned HTTP {response.status_code}: {response.text}"
-                logger.warning("HF endpoint %s returned HTTP %s: %s", hf_url, response.status_code, response.text)
-                # If 401 or 403, authentication issue - no need to retry second endpoint
-                if response.status_code in (401, 403):
-                    break
+                last_error = f"HTTP {response.status_code} from {hf_url}: {response.text[:300]}"
+                logger.warning("HF endpoint %s returned HTTP %s: %s", hf_url, response.status_code, response.text[:300])
         except Exception as e:
-            last_error = f"Connection error: {str(e)}"
+            last_error = f"Connection error to {hf_url}: {str(e)}"
             logger.warning("HF endpoint %s connection failed: %s", hf_url, e)
 
     return {
         "status": "FAILED",
         "result": None,
-        "error": last_error or "Hugging Face Inference API failed"
+        "error": last_error or "All Hugging Face Inference endpoints failed"
     }
 
 @app.get("/health")

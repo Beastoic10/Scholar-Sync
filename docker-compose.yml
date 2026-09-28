@@ -28,7 +28,7 @@ services:
     environment:
       # Set HF_TOKEN in your .env file or environment to enable real AI detection.
       # Leave empty or omit to run similarity + citation analysis only.
-      HF_TOKEN: ${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}
+      HF_TOKEN: ${HF_TOKEN}
       PORT: 8000
     restart: unless-stopped
     healthcheck:
