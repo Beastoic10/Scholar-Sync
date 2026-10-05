@@ -21,4 +21,6 @@ public class UpdateTaskRequest {
     private String description;
 
     private Long assignedStudentId;
+
+    private java.util.List<Long> assignedStudentIds;
 }

@@ -4,6 +4,7 @@ import { taskApi } from '../api';
 import {
   ArrowLeft, UserPlus, Plus, Trash2, Package,
   ArrowRight, RotateCcw, CheckCircle2, Clock,
+  MessageSquare, Edit3,
 } from 'lucide-react';
 
 interface ProjectKanbanViewProps {
@@ -15,6 +16,8 @@ interface ProjectKanbanViewProps {
   onOpenAssignStudent: () => void;
   onOpenCreateTask: () => void;
   onOpenDeliverables: (task: Task) => void;
+  onOpenChat: (task: Task) => void;
+  onOpenEditTask: (task: Task) => void;
 }
 
 type ColDef = {
@@ -74,6 +77,7 @@ export const canDragTask = (task: Task, isSupervisor: boolean): boolean => {
 export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
   project, tasks, currentUser, onBack, onRefreshTasks,
   onOpenAssignStudent, onOpenCreateTask, onOpenDeliverables,
+  onOpenChat, onOpenEditTask,
 }) => {
   const [transitioningId, setTransitioningId] = useState<number | null>(null);
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
@@ -173,8 +177,6 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
               key={col.state}
               className="kanban-col animate-fade-up"
               onDragOver={(e) => {
-                // Strict UI drag prevention:
-                // Only preventDefault if the transition to this column is valid!
                 if (draggedTask && isValidTransition(draggedTask.currentState, col.state, isSupervisor)) {
                   e.preventDefault();
                   e.dataTransfer.dropEffect = 'move';
@@ -182,12 +184,10 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
                     setDragOverCol(col.state);
                   }
                 } else {
-                  // Prohibit drop on invalid column (displays forbidden 🚫 cursor)
                   e.dataTransfer.dropEffect = 'none';
                 }
               }}
               onDragLeave={(e) => {
-                // Prevent flicker when leaving to a child element inside the column
                 if (!e.currentTarget.contains(e.relatedTarget as Node)) {
                   if (dragOverCol === col.state) {
                     setDragOverCol(null);
@@ -198,7 +198,6 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
                 e.preventDefault();
                 setDragOverCol(null);
                 if (!draggedTask) return;
-                // Strict client-side check: prevent invalid drops without firing backend requests or showing errors
                 if (!isValidTransition(draggedTask.currentState, col.state, isSupervisor)) {
                   setDraggedTask(null);
                   return;
@@ -250,6 +249,8 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
                     onTransition={handleTransition}
                     onDelete={handleDeleteTask}
                     onOpenDeliverables={onOpenDeliverables}
+                    onOpenChat={onOpenChat}
+                    onOpenEditTask={onOpenEditTask}
                     onDragStart={(t) => setDraggedTask(t)}
                     onDragEnd={() => {
                       setDraggedTask(null);
@@ -278,7 +279,7 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
 /* ─── Task Card ────────────────────────────────────────────────── */
 function TaskCard({
   task, col, isSupervisor, transitioningId, isDragging,
-  onTransition, onDelete, onOpenDeliverables, onDragStart, onDragEnd,
+  onTransition, onDelete, onOpenDeliverables, onOpenChat, onOpenEditTask, onDragStart, onDragEnd,
 }: {
   task: Task;
   col: ColDef;
@@ -288,11 +289,17 @@ function TaskCard({
   onTransition: (id: number, state: TaskStateEnum) => void;
   onDelete: (id: number) => void;
   onOpenDeliverables: (task: Task) => void;
+  onOpenChat: (task: Task) => void;
+  onOpenEditTask: (task: Task) => void;
   onDragStart: (task: Task) => void;
   onDragEnd: () => void;
 }) {
   const busy = transitioningId === task.id;
   const draggable = canDragTask(task, isSupervisor) && !busy;
+
+  const assignedList = task.assignedStudents && task.assignedStudents.length > 0
+    ? task.assignedStudents
+    : (task.assignedStudent ? [task.assignedStudent] : []);
 
   return (
     <div
@@ -334,25 +341,41 @@ function TaskCard({
         </p>
       )}
 
-      {/* Assignee */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
-        {task.assignedStudent ? (
-          <span className="badge badge-student" style={{ fontSize: '0.65rem' }}>
-            {task.assignedStudent.name}
-          </span>
-        ) : (
-          <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' }}>Unassigned</span>
-        )}
+      {/* Assignees */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: '0.6rem' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flex: 1 }}>
+          {assignedList.length > 0 ? (
+            assignedList.map((s) => (
+              <span key={s.id} className="badge badge-student" style={{ fontSize: '0.65rem' }}>
+                <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#34d399', display: 'inline-block' }} />
+                {s.name}
+              </span>
+            ))
+          ) : (
+            <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' }}>Unassigned</span>
+          )}
+        </div>
         {isSupervisor && (
-          <button
-            onClick={() => onDelete(task.id)}
-            title="Delete task"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'rgba(255,255,255,0.2)', borderRadius: 6, transition: 'color 0.15s ease' }}
-            onMouseOver={(e) => e.currentTarget.style.color = '#f87171'}
-            onMouseOut={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.2)'}
-          >
-            <Trash2 size={12} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <button
+              onClick={() => onOpenEditTask(task)}
+              title="Edit task & assignments"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'rgba(255,255,255,0.3)', borderRadius: 6, transition: 'color 0.15s ease' }}
+              onMouseOver={(e) => e.currentTarget.style.color = '#93c5fd'}
+              onMouseOut={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.3)'}
+            >
+              <Edit3 size={12} />
+            </button>
+            <button
+              onClick={() => onDelete(task.id)}
+              title="Delete task"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'rgba(255,255,255,0.3)', borderRadius: 6, transition: 'color 0.15s ease' }}
+              onMouseOver={(e) => e.currentTarget.style.color = '#f87171'}
+              onMouseOut={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.3)'}
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
         )}
       </div>
 
@@ -361,22 +384,41 @@ function TaskCard({
 
       {/* Actions row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-        {/* Deliverables */}
-        <button
-          type="button"
-          onClick={() => onOpenDeliverables(task)}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            fontSize: '0.7rem', fontWeight: 600, color: '#93c5fd',
-            background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px',
-            transition: 'color 0.15s ease',
-          }}
-          onMouseOver={(e) => e.currentTarget.style.color = '#60a5fa'}
-          onMouseOut={(e) => e.currentTarget.style.color = '#93c5fd'}
-        >
-          <Package size={11} />
-          Deliverables
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Deliverables */}
+          <button
+            type="button"
+            onClick={() => onOpenDeliverables(task)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: '0.7rem', fontWeight: 600, color: '#93c5fd',
+              background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px',
+              transition: 'color 0.15s ease',
+            }}
+            onMouseOver={(e) => e.currentTarget.style.color = '#60a5fa'}
+            onMouseOut={(e) => e.currentTarget.style.color = '#93c5fd'}
+          >
+            <Package size={11} />
+            Deliverables
+          </button>
+
+          {/* Discussion / Chat */}
+          <button
+            type="button"
+            onClick={() => onOpenChat(task)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: '0.7rem', fontWeight: 600, color: '#38bdf8',
+              background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px',
+              transition: 'color 0.15s ease',
+            }}
+            onMouseOver={(e) => e.currentTarget.style.color = '#7dd3fc'}
+            onMouseOut={(e) => e.currentTarget.style.color = '#38bdf8'}
+          >
+            <MessageSquare size={11} />
+            Discussion
+          </button>
+        </div>
 
         {/* Transitions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>

@@ -383,7 +383,16 @@ public class SubmissionServiceImpl implements SubmissionService {
             throw new TaskAccessDeniedException("You are not an enrolled student in this project");
         }
 
-        if (task.getAssignedStudent() != null && !task.getAssignedStudent().getId().equals(currentUser.getId())) {
+        boolean isAssigned = false;
+        if (task.getAssignedStudents() != null && !task.getAssignedStudents().isEmpty()) {
+            isAssigned = task.getAssignedStudents().stream().anyMatch(s -> s.getId().equals(currentUser.getId()));
+        } else if (task.getAssignedStudent() != null) {
+            isAssigned = task.getAssignedStudent().getId().equals(currentUser.getId());
+        } else {
+            isAssigned = true;
+        }
+
+        if (!isAssigned) {
             throw new TaskAccessDeniedException("You can only create submissions for tasks assigned to you");
         }
     }

@@ -32,6 +32,9 @@ public class TaskServiceImpl implements TaskService {
     private final ResearchProjectRepository projectRepository;
     private final UserRepository userRepository;
     private final TaskStateFactory stateFactory;
+    private final com.scholarsync.service.ChatService chatService;
+    private final com.scholarsync.repository.TaskChatRepository chatRepository;
+    private final com.scholarsync.repository.ChatMessageRepository messageRepository;
 
     @Override
     @Transactional
@@ -41,33 +44,47 @@ public class TaskServiceImpl implements TaskService {
 
         validateProjectAccess(project, currentUser.getId());
 
-        User assignedStudent = null;
-        if (request.getAssignedStudentId() != null) {
-            assignedStudent = userRepository.findById(request.getAssignedStudentId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Student", "id", request.getAssignedStudentId()));
+        java.util.Set<User> assignedStudents = new java.util.HashSet<>();
+        java.util.List<Long> studentIdsToAssign = new java.util.ArrayList<>();
+        if (request.getAssignedStudentIds() != null && !request.getAssignedStudentIds().isEmpty()) {
+            studentIdsToAssign.addAll(request.getAssignedStudentIds());
+        } else if (request.getAssignedStudentId() != null) {
+            studentIdsToAssign.add(request.getAssignedStudentId());
+        }
 
-            if (assignedStudent.getRole() != Role.STUDENT) {
+        for (Long studentId : studentIdsToAssign) {
+            User student = userRepository.findById(studentId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Student", "id", studentId));
+
+            if (student.getRole() != Role.STUDENT) {
                 throw new BadRequestException("Assigned user must have the STUDENT role");
             }
 
-            final Long studentId = assignedStudent.getId();
             boolean isMember = project.getStudents().stream().anyMatch(s -> s.getId().equals(studentId));
             if (!isMember) {
                 throw new BadRequestException("Assigned student is not an enrolled member of this project");
             }
+            assignedStudents.add(student);
         }
+
+        User primaryStudent = !assignedStudents.isEmpty() ? assignedStudents.iterator().next() : null;
 
         ResearchTask task = ResearchTask.builder()
                 .title(request.getTitle().trim())
                 .description(request.getDescription() != null ? request.getDescription().trim() : null)
                 .project(project)
-                .assignedStudent(assignedStudent)
+                .assignedStudent(primaryStudent)
+                .assignedStudents(assignedStudents)
                 .currentState(TaskStateEnum.PROPOSED)
                 .build();
 
         ResearchTask savedTask = taskRepository.save(task);
-        log.info("Created research task id: '{}' in project: '{}' by user: '{}'",
-                savedTask.getId(), project.getId(), currentUser.getEmail());
+        log.info("Created research task id: '{}' in project: '{}' with {} assigned students by user: '{}'",
+                savedTask.getId(), project.getId(), assignedStudents.size(), currentUser.getEmail());
+
+        if (!assignedStudents.isEmpty()) {
+            chatService.getOrCreateChatForTask(savedTask);
+        }
 
         return TaskResponse.fromEntity(savedTask);
     }
@@ -110,7 +127,24 @@ public class TaskServiceImpl implements TaskService {
             task.setDescription(request.getDescription().trim());
         }
 
-        if (request.getAssignedStudentId() != null) {
+        if (request.getAssignedStudentIds() != null) {
+            java.util.Set<User> newStudents = new java.util.HashSet<>();
+            for (Long sId : request.getAssignedStudentIds()) {
+                User student = userRepository.findById(sId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Student", "id", sId));
+                if (student.getRole() != Role.STUDENT) {
+                    throw new BadRequestException("Assigned user must have the STUDENT role");
+                }
+                boolean isMember = task.getProject().getStudents().stream().anyMatch(s -> s.getId().equals(sId));
+                if (!isMember) {
+                    throw new BadRequestException("Assigned student is not an enrolled member of this project");
+                }
+                newStudents.add(student);
+            }
+            task.getAssignedStudents().clear();
+            task.getAssignedStudents().addAll(newStudents);
+            task.setAssignedStudent(newStudents.isEmpty() ? null : newStudents.iterator().next());
+        } else if (request.getAssignedStudentId() != null) {
             User student = userRepository.findById(request.getAssignedStudentId())
                     .orElseThrow(() -> new ResourceNotFoundException("Student", "id", request.getAssignedStudentId()));
 
@@ -123,11 +157,17 @@ public class TaskServiceImpl implements TaskService {
             if (!isMember) {
                 throw new BadRequestException("Assigned student is not an enrolled member of this project");
             }
+            task.getAssignedStudents().clear();
+            task.getAssignedStudents().add(student);
             task.setAssignedStudent(student);
         }
 
         ResearchTask updatedTask = taskRepository.save(task);
         log.info("Updated task id: '{}' by user: '{}'", taskId, currentUser.getEmail());
+
+        if (updatedTask.getAssignedStudents() != null && !updatedTask.getAssignedStudents().isEmpty()) {
+            chatService.syncTaskChatParticipants(updatedTask);
+        }
 
         return TaskResponse.fromEntity(updatedTask);
     }
@@ -141,6 +181,11 @@ public class TaskServiceImpl implements TaskService {
         if (!task.getProject().getSupervisor().getId().equals(currentUser.getId())) {
             throw new TaskAccessDeniedException("Only the project supervisor can delete tasks");
         }
+
+        chatRepository.findByTaskId(taskId).ifPresent(chat -> {
+            messageRepository.findByChatIdOrderByCreatedAtAsc(chat.getId()).forEach(messageRepository::delete);
+            chatRepository.delete(chat);
+        });
 
         taskRepository.delete(task);
         log.info("Deleted task id: '{}' by supervisor: '{}'", taskId, currentUser.getEmail());

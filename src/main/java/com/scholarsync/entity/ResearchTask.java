@@ -37,10 +37,43 @@ public class ResearchTask extends BaseAuditableEntity {
     @JoinColumn(name = "assigned_student_id")
     private User assignedStudent;
 
+    @Builder.Default
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "task_assigned_students",
+        joinColumns = @JoinColumn(name = "task_id"),
+        inverseJoinColumns = @JoinColumn(name = "student_id")
+    )
+    private java.util.Set<User> assignedStudents = new java.util.HashSet<>();
+
     @Enumerated(EnumType.STRING)
     @Column(name = "current_state", nullable = false, length = 30)
     @Builder.Default
     private TaskStateEnum currentState = TaskStateEnum.PROPOSED;
+
+    public void addAssignedStudent(User student) {
+        if (student != null) {
+            if (this.assignedStudents == null) {
+                this.assignedStudents = new java.util.HashSet<>();
+            }
+            this.assignedStudents.add(student);
+            if (this.assignedStudent == null) {
+                this.assignedStudent = student;
+            }
+        }
+    }
+
+    public void removeAssignedStudent(User student) {
+        if (student != null && this.assignedStudents != null) {
+            this.assignedStudents.remove(student);
+            if (this.assignedStudent != null && this.assignedStudent.getId().equals(student.getId())) {
+                this.assignedStudent = this.assignedStudents.isEmpty() ? null : this.assignedStudents.iterator().next();
+            }
+        }
+    }
+
+    @OneToOne(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    private TaskChat chat;
 
     @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

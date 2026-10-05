@@ -13,18 +13,20 @@ import java.util.Optional;
 @Repository
 public interface ResearchTaskRepository extends JpaRepository<ResearchTask, Long> {
 
-    @Query("SELECT t FROM ResearchTask t " +
+    @Query("SELECT DISTINCT t FROM ResearchTask t " +
            "LEFT JOIN FETCH t.project p " +
            "LEFT JOIN FETCH t.assignedStudent " +
+           "LEFT JOIN FETCH t.assignedStudents " +
            "WHERE t.project.id = :projectId " +
            "ORDER BY t.createdAt ASC")
     List<ResearchTask> findByProjectIdWithDetails(@Param("projectId") Long projectId);
 
-    @Query("SELECT t FROM ResearchTask t " +
+    @Query("SELECT DISTINCT t FROM ResearchTask t " +
            "JOIN FETCH t.project p " +
            "JOIN FETCH p.supervisor " +
            "LEFT JOIN FETCH p.students " +
            "LEFT JOIN FETCH t.assignedStudent " +
+           "LEFT JOIN FETCH t.assignedStudents " +
            "WHERE t.id = :id")
     Optional<ResearchTask> findByIdWithDetails(@Param("id") Long id);
 

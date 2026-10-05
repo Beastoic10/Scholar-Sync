@@ -33,9 +33,29 @@ export interface Task {
   projectId: number;
   projectTitle: string;
   assignedStudent?: User | null;
+  assignedStudents?: User[];
   currentState: TaskStateEnum;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface TaskChat {
+  id: number;
+  taskId: number;
+  taskTitle: string;
+  projectId: number;
+  projectTitle: string;
+  participants: User[];
+  createdAt: string;
+}
+
+export interface ChatMessage {
+  id: number;
+  chatId: number;
+  taskId: number;
+  sender: User;
+  content: string;
+  createdAt: string;
 }
 
 export type SubmissionStatus = 

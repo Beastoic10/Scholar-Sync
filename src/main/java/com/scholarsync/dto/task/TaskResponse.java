@@ -22,6 +22,8 @@ public class TaskResponse {
     private Long projectId;
     private String projectTitle;
     private UserResponse assignedStudent;
+    @Builder.Default
+    private java.util.List<UserResponse> assignedStudents = new java.util.ArrayList<>();
     private TaskStateEnum currentState;
     private Instant createdAt;
     private Instant updatedAt;
@@ -31,13 +33,29 @@ public class TaskResponse {
             return null;
         }
 
+        java.util.List<UserResponse> studentResponses = new java.util.ArrayList<>();
+        if (task.getAssignedStudents() != null) {
+            for (com.scholarsync.entity.User s : task.getAssignedStudents()) {
+                studentResponses.add(UserResponse.fromEntity(s));
+            }
+        }
+
+        UserResponse primaryStudent = task.getAssignedStudent() != null
+                ? UserResponse.fromEntity(task.getAssignedStudent())
+                : (!studentResponses.isEmpty() ? studentResponses.get(0) : null);
+
+        if (primaryStudent != null && studentResponses.stream().noneMatch(s -> s.getId().equals(primaryStudent.getId()))) {
+            studentResponses.add(0, primaryStudent);
+        }
+
         return TaskResponse.builder()
                 .id(task.getId())
                 .title(task.getTitle())
                 .description(task.getDescription())
                 .projectId(task.getProject() != null ? task.getProject().getId() : null)
                 .projectTitle(task.getProject() != null ? task.getProject().getTitle() : null)
-                .assignedStudent(task.getAssignedStudent() != null ? UserResponse.fromEntity(task.getAssignedStudent()) : null)
+                .assignedStudent(primaryStudent)
+                .assignedStudents(studentResponses)
                 .currentState(task.getCurrentState())
                 .createdAt(task.getCreatedAt())
                 .updatedAt(task.getUpdatedAt())

@@ -1,4 +1,4 @@
-import type { Project, Task, TaskStateEnum, Submission, SubmissionFeedback, SubmissionSnapshot, User } from './types';
+import type { Project, Task, TaskStateEnum, Submission, SubmissionFeedback, SubmissionSnapshot, User, TaskChat, ChatMessage } from './types';
 
 const TOKEN_KEY = 'scholarsync_token';
 
@@ -88,9 +88,25 @@ export const projectApi = {
 export const taskApi = {
   getProjectTasks: (projectId: number) => apiCall<Task[]>(`/api/projects/${projectId}/tasks`),
 
-  createTask: (projectId: number, payload: { title: string; description?: string; assignedStudentId?: number | null }) =>
+  createTask: (projectId: number, payload: {
+    title: string;
+    description?: string;
+    assignedStudentId?: number | null;
+    assignedStudentIds?: number[];
+  }) =>
     apiCall<Task>(`/api/projects/${projectId}/tasks`, {
       method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateTask: (taskId: number, payload: {
+    title: string;
+    description?: string;
+    assignedStudentId?: number | null;
+    assignedStudentIds?: number[];
+  }) =>
+    apiCall<Task>(`/api/tasks/${taskId}`, {
+      method: 'PUT',
       body: JSON.stringify(payload),
     }),
 
@@ -103,6 +119,21 @@ export const taskApi = {
     apiCall<Task>(`/api/tasks/${taskId}/transition`, {
       method: 'POST',
       body: JSON.stringify({ targetState }),
+    }),
+};
+
+// CHAT
+export const chatApi = {
+  getTaskChat: (taskId: number) =>
+    apiCall<TaskChat>(`/api/tasks/${taskId}/chat`),
+
+  getChatMessages: (taskId: number) =>
+    apiCall<ChatMessage[]>(`/api/tasks/${taskId}/chat/messages`),
+
+  sendMessage: (taskId: number, content: string) =>
+    apiCall<ChatMessage>(`/api/tasks/${taskId}/chat/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
     }),
 };
 

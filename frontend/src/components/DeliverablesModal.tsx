@@ -31,6 +31,7 @@ interface DeliverablesModalProps {
   task: Task;
   currentUser: User;
   onSubmissionsUpdated?: () => void;
+  onOpenChat?: (task: Task) => void;
 }
 
 export const DeliverablesModal: React.FC<DeliverablesModalProps> = ({
@@ -39,6 +40,7 @@ export const DeliverablesModal: React.FC<DeliverablesModalProps> = ({
   task,
   currentUser,
   onSubmissionsUpdated,
+  onOpenChat,
 }) => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selectedSub, setSelectedSub] = useState<Submission | null>(null);
@@ -66,8 +68,11 @@ export const DeliverablesModal: React.FC<DeliverablesModalProps> = ({
   const [showSnapshotModal, setShowSnapshotModal] = useState(false);
 
   const isSupervisor = currentUser.role === 'SUPERVISOR';
-  const isAssignedStudent = task.assignedStudent?.id === currentUser.id;
-  const canSubmit = isSupervisor || isAssignedStudent || !task.assignedStudent;
+  const assignedList = task.assignedStudents && task.assignedStudents.length > 0
+    ? task.assignedStudents
+    : (task.assignedStudent ? [task.assignedStudent] : []);
+  const isAssignedStudent = assignedList.some((s) => s.id === currentUser.id);
+  const canSubmit = isSupervisor || isAssignedStudent || assignedList.length === 0;
 
   const loadSubmissions = async () => {
     setLoading(true);
@@ -392,18 +397,36 @@ export const DeliverablesModal: React.FC<DeliverablesModalProps> = ({
                     </span>
                     <span className="text-xs text-slate-500">•</span>
                     <span className="text-xs text-slate-400">
-                      Assignee: <strong className="text-slate-200">{task.assignedStudent?.name || 'Unassigned'}</strong>
+                      Assignee{assignedList.length > 1 ? 's' : ''}:{' '}
+                      <strong className="text-slate-200">
+                        {assignedList.length > 0
+                          ? assignedList.map((s) => s.name).join(', ')
+                          : 'Unassigned'}
+                      </strong>
                     </span>
                   </div>
                 </div>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              {onOpenChat && (
+                <button
+                  type="button"
+                  onClick={() => onOpenChat(task)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-sky-500/15 text-sky-400 border border-sky-500/30 hover:bg-sky-500/25 transition-colors"
+                  title="Open Task Discussion"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Discussion</span>
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {error && (

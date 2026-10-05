@@ -1,25 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { taskApi } from '../api';
 import type { Project, Task } from '../types';
-import { CheckSquare } from 'lucide-react';
+import { Edit3 } from 'lucide-react';
 import { ModalHeader, ErrorBar, FieldLabel } from './CreateProjectModal';
 import { MultiStudentSelector } from './MultiStudentSelector';
 
-interface CreateTaskModalProps {
+interface EditTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   project: Project;
-  onTaskCreated: (task: Task) => void;
+  task: Task;
+  onTaskUpdated: (updatedTask: Task) => void;
 }
 
-export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
-  isOpen, onClose, project, onTaskCreated,
+export const EditTaskModal: React.FC<EditTaskModalProps> = ({
+  isOpen,
+  onClose,
+  project,
+  task,
+  onTaskUpdated,
 }) => {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [title, setTitle] = useState(task.title);
+  const [description, setDescription] = useState(task.description || '');
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen && task) {
+      setTitle(task.title);
+      setDescription(task.description || '');
+      const initialIds: number[] = [];
+      if (task.assignedStudents && task.assignedStudents.length > 0) {
+        task.assignedStudents.forEach((s) => {
+          if (!initialIds.includes(s.id)) initialIds.push(s.id);
+        });
+      } else if (task.assignedStudent) {
+        initialIds.push(task.assignedStudent.id);
+      }
+      setSelectedStudentIds(initialIds);
+      setError(null);
+    }
+  }, [isOpen, task]);
 
   if (!isOpen) return null;
 
@@ -29,29 +51,28 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const newTask = await taskApi.createTask(project.id, {
+      const updatedTask = await taskApi.updateTask(task.id, {
         title: title.trim(),
         description: description.trim() || undefined,
         assignedStudentIds: selectedStudentIds,
         assignedStudentId: selectedStudentIds.length > 0 ? selectedStudentIds[0] : null,
       });
-      setTitle('');
-      setDescription('');
-      setSelectedStudentIds([]);
-      onTaskCreated(newTask);
+      onTaskUpdated(updatedTask);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to create task');
-    } finally { setLoading(false); }
+      setError(err.message || 'Failed to update task');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="modal-backdrop">
       <div className="glass-strong animate-fade-up" style={{ width: '100%', maxWidth: 520 }}>
         <ModalHeader
-          icon={<CheckSquare size={17} style={{ color: '#93c5fd' }} />}
-          title="New Research Task"
-          subtitle="Starts in PROPOSED state"
+          icon={<Edit3 size={17} style={{ color: '#93c5fd' }} />}
+          title="Edit Research Task"
+          subtitle={`Task #${task.id} (${task.currentState})`}
           onClose={onClose}
         />
 
@@ -60,23 +81,25 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
         <form onSubmit={handleSubmit} style={{ padding: '0 1.5rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.875rem', marginTop: '0.875rem' }}>
           <FieldLabel label="Task Title" required>
             <input
-              type="text" required value={title}
+              type="text"
+              required
+              value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Conduct Survey on Transformer Pruning Methods"
               className="glass-input"
             />
           </FieldLabel>
 
           <FieldLabel label="Description & Deliverables Requirements">
             <textarea
-              rows={3} value={description}
+              rows={3}
+              value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Methodologies, dataset requirements, expected deliverables..."
-              className="glass-input" style={{ resize: 'none' }}
+              className="glass-input"
+              style={{ resize: 'none' }}
             />
           </FieldLabel>
 
-          <FieldLabel label="Assign Student Researcher(s)">
+          <FieldLabel label="Assigned Student Researcher(s)">
             <MultiStudentSelector
               availableStudents={project.students}
               selectedStudentIds={selectedStudentIds}
@@ -86,9 +109,11 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
           </FieldLabel>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 4 }}>
-            <button type="button" onClick={onClose} className="btn-ghost" style={{ fontSize: '0.8rem' }}>Cancel</button>
+            <button type="button" onClick={onClose} className="btn-ghost" style={{ fontSize: '0.8rem' }}>
+              Cancel
+            </button>
             <button type="submit" disabled={loading || !title.trim()} className="btn-primary" style={{ fontSize: '0.8rem' }}>
-              {loading ? 'Creating...' : 'Create Task'}
+              {loading ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>

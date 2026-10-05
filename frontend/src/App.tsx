@@ -7,8 +7,10 @@ import { DashboardView } from './components/DashboardView';
 import { ProjectKanbanView } from './components/ProjectKanbanView';
 import { CreateProjectModal } from './components/CreateProjectModal';
 import { CreateTaskModal } from './components/CreateTaskModal';
+import { EditTaskModal } from './components/EditTaskModal';
 import { AssignStudentModal } from './components/AssignStudentModal';
 import { DeliverablesModal } from './components/DeliverablesModal';
+import { TaskChatModal } from './components/TaskChatModal';
 import { BackgroundScene } from './components/BackgroundScene';
 
 export function App() {
@@ -27,6 +29,8 @@ export function App() {
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [assignStudentOpen, setAssignStudentOpen] = useState(false);
   const [deliverablesTask, setDeliverablesTask] = useState<Task | null>(null);
+  const [chatTask, setChatTask] = useState<Task | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   // Initialize Auth
   useEffect(() => {
@@ -148,6 +152,8 @@ export function App() {
               onOpenAssignStudent={() => setAssignStudentOpen(true)}
               onOpenCreateTask={() => setCreateTaskOpen(true)}
               onOpenDeliverables={(task) => setDeliverablesTask(task)}
+              onOpenChat={(task) => setChatTask(task)}
+              onOpenEditTask={(task) => setEditingTask(task)}
             />
           )
         )}
@@ -184,6 +190,21 @@ export function App() {
               );
             }}
           />
+
+          {editingTask && (
+            <EditTaskModal
+              isOpen={!!editingTask}
+              onClose={() => setEditingTask(null)}
+              project={currentProject}
+              task={editingTask}
+              onTaskUpdated={(updatedTask) => {
+                setCurrentTasks((prev) =>
+                  prev.map((t) => (t.id === updatedTask.id ? updatedTask : t))
+                );
+                handleRefreshTasks();
+              }}
+            />
+          )}
         </>
       )}
 
@@ -194,6 +215,19 @@ export function App() {
           task={deliverablesTask}
           currentUser={currentUser}
           onSubmissionsUpdated={handleRefreshTasks}
+          onOpenChat={(task) => {
+            setDeliverablesTask(null);
+            setChatTask(task);
+          }}
+        />
+      )}
+
+      {chatTask && (
+        <TaskChatModal
+          isOpen={!!chatTask}
+          onClose={() => setChatTask(null)}
+          task={chatTask}
+          currentUser={currentUser}
         />
       )}
     </div>
